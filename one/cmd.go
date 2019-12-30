@@ -12,14 +12,6 @@ import (
 type CobraCommand interface {
 }
 
-type Option func(cmd *cobra.Command)
-
-func Desc(value string) Option {
-	return func(cmd *cobra.Command) {
-		cmd.Short = value
-	}
-}
-
 // Main is used to provide shorter main body.
 func Main(cmdlist []CobraCommand, options ...Option) {
 	rootCmd := &cobra.Command{}
@@ -107,4 +99,16 @@ func NewCmd(zero interface{}, use string, short string) *cobra.Command {
 
 func (c *Cmd) Run() error {
 	return fmt.Errorf("command %s is not implemented", c.Command.Name())
+}
+
+//
+// options
+//
+
+type Option func(cmd *cobra.Command)
+
+func Desc(value string) Option {
+	return func(cmd *cobra.Command) {
+		cmd.Short = value
+	}
 }

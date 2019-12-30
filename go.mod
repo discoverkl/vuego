@@ -1,4 +1,4 @@
-module one
+module github.com/discoverkl/vuego
 
 go 1.13
 
