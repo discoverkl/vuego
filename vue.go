@@ -52,6 +52,12 @@ func pageServer(ws *websocket.Conn) {
 		}
 	}
 
+	// server ready
+	err = ui.Ready()
+	if err != nil {
+		log.Println("failed to make page ready:", err)
+	}
+
 	// log.Println(ui.Eval("1 + 2").Int())
 	<-ui.Done()
 }

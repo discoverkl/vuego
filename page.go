@@ -13,6 +13,7 @@ type Page interface {
 	Bind(name string, f interface{}) error
 	Eval(js string) Value
 	Done() <-chan struct{}
+	Ready() error
 }
 
 type page struct {
@@ -90,6 +91,10 @@ func (c *page) Eval(js string) Value {
 
 func (c *page) Done() <-chan struct{} {
 	return c.done
+}
+
+func (c *page) Ready() error {
+	return c.jsc.ready()
 }
 
 func checkBindFunc(f interface{}) error {

@@ -73,7 +73,7 @@ func (p *jsClient) readLoop() {
 		switch m.Method {
 		case "1":
 			go func() {
-				_, err := p.send("Vuego.call", h{"name": "eval", "args": []string{"1+2"}})
+				_, err := p.send("Vuego.call", h{"name": "eval", "args": []string{"1+2"}}, true)
 				if err != nil {
 					log.Println("send message:", err)
 				}
@@ -91,6 +91,10 @@ func (p *jsClient) readLoop() {
 			p.Unlock()
 
 			if !ok {
+				var v interface{}
+				err = json.Unmarshal(ret.Result, &v)
+				valid := (err == nil)
+				log.Printf("ignore Vuego.ret %d: valid=%v ret=%v, err=%s", m.ID, valid, v, ret.Error)
 				continue
 			}
 
@@ -133,7 +137,10 @@ if (%[4]s) {
 root['%[1]s']['callbacks'].delete(%[2]d);
 root['%[1]s']['errors'].delete(%[2]d)
 `, call.Name, call.Seq, jsRet, jsErr)
-				_, _ = p.send("Vuego.call", h{"name": "eval", "args": []string{expr}})
+				_, err = p.send("Vuego.call", h{"name": "eval", "args": []string{expr}}, true)
+				if err != nil {
+					log.Println("binding call phrase 3 failed:", err)
+				}
 			}()
 
 		default:
@@ -142,26 +149,34 @@ root['%[1]s']['errors'].delete(%[2]d)
 	}
 }
 
-func (p *jsClient) send(method string, params h) (json.RawMessage, error) {
+func (p *jsClient) send(method string, params h, wait bool) (json.RawMessage, error) {
+	log.Printf("send method %s, wait=%v", method, wait)
 	id := atomic.AddInt32(&p.id, 1)
 	m := h{"id": int(id), "method": method, "params": params}
 
-	retCh := make(chan result)
-	p.Lock()
-	p.pending[int(id)] = retCh
-	p.Unlock()
+	var retCh chan result
+	if wait {
+		retCh = make(chan result)
+		p.Lock()
+		p.pending[int(id)] = retCh
+		p.Unlock()
+	}
 
 	err := websocket.JSON.Send(p.ws, m)
 	if err != nil {
 		// TODO: remove item in p.pending
 		return nil, err
 	}
+
+	if !wait {
+		return nil, nil
+	}
 	ret := <-retCh
 	return ret.Value, ret.Err
 }
 
 func (p *jsClient) eval(expr string) (json.RawMessage, error) {
-	return p.send("Vuego.call", h{"name": "eval", "args": []string{expr}})
+	return p.send("Vuego.call", h{"name": "eval", "args": []string{expr}}, true)
 }
 
 func (p *jsClient) bind(name string, f bindingFunc) error {
@@ -174,7 +189,14 @@ func (p *jsClient) bind(name string, f bindingFunc) error {
 		return nil
 	}
 
-	if _, err := p.send("Vuego.bind", h{"name": name}); err != nil {
+	if _, err := p.send("Vuego.bind", h{"name": name}, false); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p *jsClient) ready() error {
+	if _, err := p.send("Vuego.ready", nil, false); err != nil {
 		return err
 	}
 	return nil

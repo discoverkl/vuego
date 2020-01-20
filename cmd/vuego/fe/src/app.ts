@@ -15,54 +15,81 @@ interface CallMessage {
 }
 
 (function() {
-  let vuego = {};
-  let host = window.document.location.host;
-  window.vuego = vuego;
-
-  let ws = new WebSocket(`ws://${host}/vuego`);
-  ws.onmessage = e => {
-    let msg = JSON.parse(e.data);
-    console.log("receive: ", JSON.stringify(msg, null, "  "));
-    let method = msg.method;
-    let params;
-    switch (method) {
-      case "Vuego.call":
-        params = msg.params;
-        switch (params.name) {
-          case "eval":
-            let ret, err;
-            try {
-              ret = eval(params.args[0]);
-            } catch (ex) {
-              err = ex.toString() || "unknown error";
-            }
-            let retMsg: Message = {
-              id: msg.id,
-              method: "Vuego.ret",
-              params: {
-                result: ret,
-                error: err
+  function attach(ws: WebSocket) {
+    ws.onmessage = e => {
+      let msg = JSON.parse(e.data);
+      console.log("receive: ", JSON.stringify(msg, null, "  "));
+      let method = msg.method;
+      let params;
+      switch (method) {
+        case "Vuego.call":
+          params = msg.params;
+          switch (params.name) {
+            case "eval":
+              let ret, err;
+              try {
+                ret = eval(params.args[0]);
+              } catch (ex) {
+                err = ex.toString() || "unknown error";
               }
-            };
-            ws.send(JSON.stringify(retMsg));
-            break;
+              // let retMsg: Message = {
+              //   id: msg.id,
+              //   method: "Vuego.ret",
+              //   params: {
+              //     result: ret,
+              //     error: err
+              //   }
+              // };
+              // ws.send(JSON.stringify(retMsg));
+              reply(msg.id, ret, err);
+              break;
+          }
+          break;
+        case "Vuego.bind":
+          params = msg.params;
+          bind(params.name);
+          break;
+        case "Vuego.ready":
+          // TODO: raise ready event only once
+          break;
+      }
+    };
+
+    ws.onopen = e => {
+      // ws.send(JSON.stringify({ method: "1" }));
+    };
+    ws.onerror = e => {
+      console.log("ws error:", e);
+    };
+    ws.onclose = e => {
+      console.log("ws close:", e);
+    };
+
+    function reply(id: number, ret?: any, err?: string) {
+      if (ret === undefined) ret = null;
+      if (err === undefined) err = null;
+      let msg: Message = {
+        id: id,
+        method: "Vuego.ret",
+        params: {
+          result: ret,
+          error: err
         }
-        break;
-      case "Vuego.bind":
-        params = msg.params;
-        bind(params.name);
-        break;
+      };
+      ws.send(JSON.stringify(msg));
     }
-  };
+  }
 
-  ws.onopen = e => {
-    // ws.send(JSON.stringify({ method: "1" }));
-  };
+  function getRoot(): any {
+    if (window.vuego === undefined) {
+      window.vuego = {};
+    }
+    return window.vuego;
+  }
 
-  // script := fmt.Sprintf(`
   function bind(name: string) {
     // const refBindingName = "%s";
-    let root = window.vuego;
+    let root = getRoot();
     const bindingName = name;
     root[bindingName] = async (...args) => {
       const me = root[bindingName];
@@ -129,4 +156,14 @@ interface CallMessage {
       return promise;
     };
   }
+
+  let host = window.document.location.host;
+  let ws = new WebSocket(`ws://${host}/vuego`);
+  attach(ws);
 })();
+
+async function main() {
+  let sum = await vuego.add(2, 2);
+  console.log(sum);
+}
+// main();
