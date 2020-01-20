@@ -145,6 +145,7 @@ interface RefCallMessage {
 
       ws.onopen = e => {
         // ws.send(JSON.stringify({ method: "1" }));
+        (window as any).document.body.style.opacity = 1;
       };
 
       ws.onerror = e => {
@@ -152,6 +153,7 @@ interface RefCallMessage {
       };
 
       ws.onclose = e => {
+        (window as any).document.body.style.opacity = 0.382;
         console.log("ws close:", e);
       };
     }

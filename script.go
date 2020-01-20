@@ -149,11 +149,13 @@ var script = `var __awaiter = (this && this.__awaiter) || function (thisArg, _ar
             ws.onmessage = this.onmessage.bind(this);
             ws.onopen = e => {
                 // ws.send(JSON.stringify({ method: "1" }));
+                window.document.body.style.opacity = 1;
             };
             ws.onerror = e => {
                 console.log("ws error:", e);
             };
             ws.onclose = e => {
+                window.document.body.style.opacity = 0.382;
                 console.log("ws close:", e);
             };
         }

@@ -2,6 +2,7 @@ package vuego
 
 import (
 	"encoding/json"
+	"time"
 	"net"
 	"sync"
 	"fmt"
@@ -67,6 +68,7 @@ func Listener(listener net.Listener) option {
 	}
 }
 
+//TODO: DO NOT use global http.Handle
 func HandleHTTP(serverPath string) {
 	once.Do(func() {
 		if serverPath == "" {
@@ -152,10 +154,13 @@ func (s *server) Bind(name string, f interface{}) error {
 
 func (s *server) pageServer(ws *websocket.Conn) {
 	s.wg.Add(1)
+	defer func() {
+		<- time.After(time.Millisecond * 200)		// support fast page refresh
+		s.wg.Done()
+	}()
 	s.once.Do(func() {
 		close(s.started)
 	})
-	defer s.wg.Done()
 	page, err := Attach(ws)
 	if err != nil {
 		log.Printf("attach websocket failed: %v", err)

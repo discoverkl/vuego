@@ -21,6 +21,11 @@ type chromePage struct {
 	cmd        *exec.Cmd
 	chromeDone chan struct{}
 	closeOnce  sync.Once
+	done chan struct{}
+}
+
+func NewPage(root http.FileSystem) (vuego.Window, error) {
+	return New(root, "", 0, 0, 0, 0)
 }
 
 func New(root http.FileSystem, dir string, x, y int, width, height int, customArgs ...string) (vuego.Window, error) {
@@ -35,33 +40,43 @@ func New(root http.FileSystem, dir string, x, y int, width, height int, customAr
 	go vuego.FileServer(root, vuego.Listener(listener))
 
 	// ** native window
-	if dir == "" {
-		name, err := ioutil.TempDir("", "vuego-chrome")
-		if err != nil {
-			return nil, err
+	var c *chromePage
+	var args []string
+	if width > 0 {
+		if dir == "" {
+			name, err := ioutil.TempDir("", "vuego-chrome")
+			if err != nil {
+				return nil, err
+			}
+			dir = name
 		}
-		dir = name
-	}
-	args := append(defaultChromeArgs, fmt.Sprintf("--app=%s", url))
-	args = append(args, fmt.Sprintf("--user-data-dir=%s", dir))
-	args = append(args, fmt.Sprintf("--window-position=%d,%d", x, y))
-	args = append(args, fmt.Sprintf("--window-size=%d,%d", width, height))
-	args = append(args, customArgs...)
+		args = append(defaultChromeArgs, fmt.Sprintf("--app=%s", url))
+		args = append(args, fmt.Sprintf("--user-data-dir=%s", dir))
+		args = append(args, fmt.Sprintf("--window-position=%d,%d", x, y))
+		args = append(args, fmt.Sprintf("--window-size=%d,%d", width, height))
+		args = append(args, customArgs...)
 
-	c, err := newChromeWithArgs(findChrome(), args...)
+		c, err = newChromeWithArgs(findChrome(), args...)
+	} else {
+		args = append(args, url)
+		c, err = newChromeWithArgs(findChrome(), args...)
+	}
 	if err != nil {
 		return nil, err
 	}
 
-	// close window when all clients gone
+	// done = vuego.Done
 	go func() {
 		<-vuego.Done()
-		c.Close()
+		c.Close()	// will close(c.done)
 	}()
 
 	// done = chrome gone
 	go func() {
-		_ = c.cmd.Wait()
+		err := c.cmd.Wait()
+		if dev {
+			log.Printf("chrome wait return: %v", err)
+		}
 		close(c.chromeDone)
 	}()
 
@@ -75,6 +90,7 @@ func newChromeWithArgs(chromeBinary string, args ...string) (*chromePage, error)
 	c := &chromePage{
 		cmd:        exec.Command(chromeBinary, args...),
 		chromeDone: make(chan struct{}),
+		done: make(chan struct{}),
 	}
 
 	if err := c.cmd.Start(); err != nil {
@@ -94,7 +110,7 @@ func (c *chromePage) Eval(js string) vuego.Value {
 }
 
 func (c *chromePage) Done() <-chan struct{} {
-	return c.chromeDone
+	return c.done
 }
 
 func (c *chromePage) Close() error {
@@ -102,6 +118,7 @@ func (c *chromePage) Close() error {
 		if dev {
 			log.Println("chromePage.Close called")
 		}
+		// close chrome process (for app mode)
 		if state := c.cmd.ProcessState; state == nil || !state.Exited() {
 			err := c.cmd.Process.Signal(os.Interrupt) // DO NOT kill -> enable gracefully exit
 			if err != nil {
@@ -110,6 +127,11 @@ func (c *chromePage) Close() error {
 		}
 		//TODO: timeout and force kill
 		<-c.chromeDone
+
+		// close local server
+		close(c.done)
+
+		//TODO: close client pages when connection lost
 	})
 	return nil
 }
