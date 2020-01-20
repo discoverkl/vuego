@@ -29,11 +29,12 @@ func OnSave(ctx context.Context, dir string, fn func(basename string)) error {
 	addAll := func(dir string) {
 		// single file watch
 		if fi, err := os.Stat(dir); err == nil && !fi.IsDir() {
-			watcher.Add(dir)
+			_ = watcher.Add(dir)
 			return
 		}
 
-		filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+			_ = err
 			if info.IsDir() {
 				if dev {
 					log.Printf("[fsw] ADD %s", path)

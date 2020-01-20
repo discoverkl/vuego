@@ -45,6 +45,7 @@ type jsClient struct {
 	pending map[int]chan result
 	ws      *websocket.Conn
 	binding map[string]bindingFunc
+	done chan struct{}
 }
 
 func newJSClient(ws *websocket.Conn) (*jsClient, error) {
@@ -52,12 +53,14 @@ func newJSClient(ws *websocket.Conn) (*jsClient, error) {
 		ws:      ws,
 		pending: map[int]chan result{},
 		binding: map[string]bindingFunc{},
+		done: make(chan struct{}),
 	}
 	go p.readLoop()
 	return p, nil
 }
 
 func (p *jsClient) readLoop() {
+	defer close(p.done)
 	for {
 		m := msg{}
 		if err := websocket.JSON.Receive(p.ws, &m); err != nil {

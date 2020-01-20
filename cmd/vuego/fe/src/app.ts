@@ -15,6 +15,8 @@ interface CallMessage {
 }
 
 (function() {
+  let dev = true;
+
   class Vuego {
     ws: WebSocket;
     root: {};
@@ -43,7 +45,7 @@ interface CallMessage {
     onmessage(e: MessageEvent) {
       let ws = this.ws;
       let msg = JSON.parse(e.data);
-      console.log("receive: ", JSON.stringify(msg, null, "  "));
+      if (dev) console.log("receive: ", JSON.stringify(msg, null, "  "));
       let root = this.root;
       let method = msg.method;
       let params;
@@ -201,22 +203,32 @@ interface CallMessage {
     }
   }
 
+  function getparam(name: string, search?: string): string | undefined {
+    search = search === undefined ? window.location.search : search;
+    let pair = search
+      .slice(1)
+      .split("&")
+      .map(one => one.split("="))
+      .filter(one => one[0] == name)
+      .slice(-1)[0];
+    if (pair === undefined) return;
+    return pair[1] || "";
+  }
+
   async function main() {
-    let host = window.document.location.host;
+    let host = window.location.host;
     let ws = new WebSocket("ws://" + host + "/vuego");
     let vuego = new Vuego(ws);
     let api = await vuego.attach();
     try {
-      // console.log(await api.add(1, 2));
-      // await api.timer(v => {
-      //   console.log(v);
-      //   return `${v}`.length;
-      // });
     } catch (ex) {
       console.log("call error:", ex);
     }
+    let search = undefined;
     let win: any = window;
-    win.api = api;
+    let name = getparam("name", search);
+    if (name === undefined || name === "window") Object.assign(win, api);
+    else if (name) win[name] = api;
   }
   main();
 })();

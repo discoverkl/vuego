@@ -1,9 +1,28 @@
 package vuego
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 func init() {
-	script = strings.ReplaceAll(script, "/vuego", ServerPath)
+	script = mapScript(script, "let dev = true", "let dev = false")
+}
+
+func mapScript(in, old, new string) string {
+	if old == new {
+		return in
+	}
+	index := strings.Index(in, old)
+	if index == -1 {
+		panic(fmt.Sprintf("mspScript error, old string not found: %s", old))
+	}
+	ret := strings.Replace(in, old, new, 1)
+	index = strings.Index(ret, old)
+	if index != -1 {
+		panic(fmt.Sprintf("mspScript error, old string appears many times: %s", old))
+	}
+	return ret
 }
 
 var script = `var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
@@ -16,6 +35,7 @@ var script = `var __awaiter = (this && this.__awaiter) || function (thisArg, _ar
     });
 };
 (function () {
+    let dev = true;
     class Vuego {
         constructor(ws) {
             this.ws = ws;
@@ -40,7 +60,8 @@ var script = `var __awaiter = (this && this.__awaiter) || function (thisArg, _ar
         onmessage(e) {
             let ws = this.ws;
             let msg = JSON.parse(e.data);
-            console.log("receive: ", JSON.stringify(msg, null, "  "));
+            if (dev)
+                console.log("receive: ", JSON.stringify(msg, null, "  "));
             let root = this.root;
             let method = msg.method;
             let params;
@@ -193,14 +214,36 @@ var script = `var __awaiter = (this && this.__awaiter) || function (thisArg, _ar
             });
         }
     }
+    function getparam(name, search) {
+        search = search === undefined ? window.location.search : search;
+        let pair = search
+            .slice(1)
+            .split("&")
+            .map(one => one.split("="))
+            .filter(one => one[0] == name)
+            .slice(-1)[0];
+        if (pair === undefined)
+            return;
+        return pair[1] || "";
+    }
     function main() {
         return __awaiter(this, void 0, void 0, function* () {
-            let host = window.document.location.host;
+            let host = window.location.host;
             let ws = new WebSocket("ws://" + host + "/vuego");
             let vuego = new Vuego(ws);
             let api = yield vuego.attach();
+            try {
+            }
+            catch (ex) {
+                console.log("call error:", ex);
+            }
+            let search = undefined;
             let win = window;
-            win.api = api;
+            let name = getparam("name", search);
+            if (name === undefined || name === "window")
+                Object.assign(win, api);
+            else if (name)
+                win[name] = api;
         });
     }
     main();

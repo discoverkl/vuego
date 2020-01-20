@@ -20,12 +20,10 @@ func timer(write *vuego.Function) {
 }
 
 func main() {
-	http.Handle("/", http.FileServer(http.Dir("./fe/dist")))
-
-	_ = vuego.Bind("add", add)
+	vuego.Bind("add", add)
 	vuego.Bind("timer", timer)
 
-	if err := http.ListenAndServe(":8000", nil); err != nil {
+	if err := vuego.FileServer(http.Dir("./fe/dist"), vuego.Addr(":8000")); err != nil {
 		log.Fatal(err)
 	}
 

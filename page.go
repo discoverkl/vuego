@@ -19,7 +19,7 @@ type Page interface {
 
 type page struct {
 	jsc  *jsClient
-	done chan struct{}
+	// done chan struct{}
 }
 
 func newPage(ws *websocket.Conn) (Page, error) {
@@ -29,7 +29,7 @@ func newPage(ws *websocket.Conn) (Page, error) {
 	}
 	ui := &page{
 		jsc:  jsc,
-		done: make(chan struct{}),
+		// done: make(chan struct{}),
 	}
 	return ui, nil
 }
@@ -97,7 +97,7 @@ func (c *page) Eval(js string) Value {
 }
 
 func (c *page) Done() <-chan struct{} {
-	return c.done
+	return c.jsc.done
 }
 
 func (c *page) Ready() error {
