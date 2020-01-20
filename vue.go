@@ -1,16 +1,47 @@
 package vuego
 
 import (
+	"fmt"
 	"log"
 	"net/http"
-
 	"golang.org/x/net/websocket"
 )
 
-const PageServerPath = "/vuego"
+// socket server path.
+const (
+	ServerPath = "/vuego"
+)
 
+// ScriptPath is the script serving path.
+var ScriptPath string
+var ins *server
+
+// Bind a api for javascript.
 func Bind(name string, f interface{}) error {
 	return ins.Bind(name, f)
+}
+
+// Attach a websocket connection.
+func Attach(ws *websocket.Conn) (Page, error) {
+	page, err := newPage(ws)
+	if err != nil {
+		return nil, fmt.Errorf("create page error: %v", err)
+	}
+
+	// bind api
+	for name, f := range ins.binding {
+		err := page.Bind(name, f)
+		if err != nil {
+			return nil, fmt.Errorf("bind api %s failed: %v", name, err)
+		}
+	}
+
+	// server ready
+	err = page.Ready()
+	if err != nil {
+		return nil, fmt.Errorf("failed to make page ready: %v", err)
+	}
+	return page, nil
 }
 
 type server struct {
@@ -18,7 +49,12 @@ type server struct {
 }
 
 func newServer() *server {
-	http.Handle(PageServerPath, websocket.Handler(pageServer))
+	http.Handle(ServerPath, websocket.Handler(pageServer))
+	http.HandleFunc(ScriptPath, func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Add("Content-Type", "text/javascript")
+		fmt.Fprint(w, script)
+	})
+	// TODO: handle script path
 	return &server{
 		binding: map[string]interface{}{},
 	}
@@ -32,32 +68,15 @@ func (s *server) Bind(name string, f interface{}) error {
 	return nil
 }
 
-var ins *server
-
 func init() {
+	ScriptPath = fmt.Sprintf("%s.js", ServerPath)
 	ins = newServer()
 }
 
 func pageServer(ws *websocket.Conn) {
-	ui, err := newPage(ws)
+	page, err := Attach(ws)
 	if err != nil {
-		log.Println("create page error:", err)
+		log.Println(err)
 	}
-
-	// bind api
-	for name, f := range ins.binding {
-		err := ui.Bind(name, f)
-		if err != nil {
-			log.Printf("bind api %s failed: %v", name, err)
-		}
-	}
-
-	// server ready
-	err = ui.Ready()
-	if err != nil {
-		log.Println("failed to make page ready:", err)
-	}
-
-	// log.Println(ui.Eval("1 + 2").Int())
-	<-ui.Done()
+	<-page.Done()
 }

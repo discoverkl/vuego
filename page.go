@@ -9,11 +9,12 @@ import (
 	"golang.org/x/net/websocket"
 )
 
+// Page of a javascript client.
 type Page interface {
 	Bind(name string, f interface{}) error
 	Eval(js string) Value
 	Done() <-chan struct{}
-	Ready() error
+	Ready() error	// nofity server ready ( all functions binded )
 }
 
 type page struct {
@@ -46,10 +47,16 @@ func (c *page) Bind(name string, f interface{}) error {
 		args := []reflect.Value{}
 
 		// TODO: argumets rewrite
+		functionType := reflect.TypeOf((**Function)(nil))
 		for i := range raw {
 			arg := reflect.New(v.Type().In(i))
 			if err := json.Unmarshal(raw[i], arg.Interface()); err != nil {
-				return nil , err
+				return nil, err
+			}
+			if arg.Type() == functionType {
+				fn := arg.Elem().Interface().(*Function)
+				fn.jsc = c.jsc
+				defer fn.close()
 			}
 			args = append(args, arg.Elem())
 		}

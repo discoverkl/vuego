@@ -3,7 +3,6 @@ package vuego
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"sync"
@@ -69,6 +68,7 @@ func (p *jsClient) readLoop() {
 			log.Println("receive bad message:", err)
 			continue
 		}
+		// log.Printf("[receive] %s", m.Method)
 
 		switch m.Method {
 		case "1":
@@ -118,26 +118,18 @@ func (p *jsClient) readLoop() {
 				break
 			}
 
-			jsString := func(v interface{}) string { b, _ := json.Marshal(v); return string(b) }
 			go func() {
-				jsRet, jsErr := "", `""`
+				// jsRet is null or string, jsErr is json value
+				var jsRet, jsErr interface{}
+				// binding call phrase 2
 				if ret, err := binding(call.Args); err != nil {
-					jsErr = jsString(err.Error())
-				} else if bytesRet, err := json.Marshal(ret); err != nil {
-					jsErr = jsString(err.Error())
+					jsErr = err.Error()
+				} else if _, err = json.Marshal(ret); err != nil {
+					jsErr = err.Error()
 				} else {
-					jsRet = string(bytesRet)
+					jsRet = ret
 				}
-				expr := fmt.Sprintf(`let root = window.vuego;
-if (%[4]s) {
-	root['%[1]s']['errors'].get(%[2]d)(%[4]s);
-} else {
-	root['%[1]s']['callbacks'].get(%[2]d)(%[3]s);
-}
-root['%[1]s']['callbacks'].delete(%[2]d);
-root['%[1]s']['errors'].delete(%[2]d)
-`, call.Name, call.Seq, jsRet, jsErr)
-				_, err = p.send("Vuego.call", h{"name": "eval", "args": []string{expr}}, true)
+				_, err = p.send("Vuego.ret", h{"name": call.Name, "seq": call.Seq, "result": jsRet, "error": jsErr}, false)
 				if err != nil {
 					log.Println("binding call phrase 3 failed:", err)
 				}
@@ -150,7 +142,7 @@ root['%[1]s']['errors'].delete(%[2]d)
 }
 
 func (p *jsClient) send(method string, params h, wait bool) (json.RawMessage, error) {
-	log.Printf("send method %s, wait=%v", method, wait)
+	log.Printf("[send] method %s, wait=%v", method, wait)
 	id := atomic.AddInt32(&p.id, 1)
 	m := h{"id": int(id), "method": method, "params": params}
 

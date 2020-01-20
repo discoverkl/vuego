@@ -2,7 +2,7 @@ package vuego
 
 import "encoding/json"
 
-// JSON value or error.
+// Value is JSON value or error.
 type Value interface {
 	Err() error
 	To(interface{}) error
