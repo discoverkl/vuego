@@ -1,6 +1,7 @@
 package vuego
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,11 +15,11 @@ type Page interface {
 	Bind(name string, f interface{}) error
 	Eval(js string) Value
 	Done() <-chan struct{}
-	Ready() error	// nofity server ready ( all functions binded )
+	Ready() error // nofity server ready ( all functions binded )
 }
 
 type page struct {
-	jsc  *jsClient
+	jsc *jsClient
 	// done chan struct{}
 }
 
@@ -28,7 +29,7 @@ func newPage(ws *websocket.Conn) (Page, error) {
 		return nil, err
 	}
 	ui := &page{
-		jsc:  jsc,
+		jsc: jsc,
 		// done: make(chan struct{}),
 	}
 	return ui, nil
@@ -48,14 +49,33 @@ func (c *page) Bind(name string, f interface{}) error {
 
 		// TODO: argumets rewrite
 		functionType := reflect.TypeOf((**Function)(nil))
+		contextType := reflect.TypeOf((*context.Context)(nil))
 		for i := range raw {
+			// ** process functionType and contxtType
 			arg := reflect.New(v.Type().In(i))
+
+			isContext := false
+			if arg.Type() == contextType {
+				isContext = true
+				arg = reflect.New(reflect.TypeOf((*Context)(nil))) // rewrite context.Context interface to vuego.Context type
+			}
+
 			if err := json.Unmarshal(raw[i], arg.Interface()); err != nil {
 				return nil, err
 			}
-			if arg.Type() == functionType {
-				fn := arg.Elem().Interface().(*Function)
-				fn.jsc = c.jsc
+
+			if isContext {
+				ctx := arg.Elem().Interface().(*Context)
+				cancel := ctx.WithCancel()
+				defer cancel()
+				c.jsc.ref(ctx.Seq, cancel)
+				defer c.jsc.unref(ctx.Seq)
+
+			} else if arg.Type() == functionType {
+				fn, _ := arg.Elem().Interface().(*Function)
+				if fn != nil {
+					fn.jsc = c.jsc
+				}
 				defer fn.close()
 			}
 			args = append(args, arg.Elem())

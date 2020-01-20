@@ -24,7 +24,6 @@ func mapScript(in, old, new string) string {
 	}
 	return ret
 }
-
 var script = `var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -41,6 +40,8 @@ var script = `var __awaiter = (this && this.__awaiter) || function (thisArg, _ar
             this.ws = ws;
             this.root = {};
             this.resolveAPI = null;
+            this.lastRefID = 0;
+            this.initContext();
         }
         replymessage(id, ret, err) {
             if (ret === undefined)
@@ -146,7 +147,6 @@ var script = `var __awaiter = (this && this.__awaiter) || function (thisArg, _ar
             });
         }
         bind(name) {
-            // const refBindingName = "%s";
             let root = this.root;
             const bindingName = name;
             root[bindingName] = (...args) => __awaiter(this, void 0, void 0, function* () {
@@ -161,26 +161,21 @@ var script = `var __awaiter = (this && this.__awaiter) || function (thisArg, _ar
                         }
                         const seq = (callbacks["lastSeq"] || 0) + 1;
                         callbacks["lastSeq"] = seq;
-                        callbacks.set(seq, args[i]); // root[bindingName].functions[callbackSeq] = func value
+                        callbacks.set(seq, args[i]); // root[bindingName].callbacks[callbackSeq] = func value
                         args[i] = {
                             bindingName: bindingName,
                             seq: seq
                         };
                     }
-                    // else if (args[i] instanceof context.Context) {
-                    //   const ref = root[refBindingName];
-                    //   let objs = ref["objs"];
-                    //   if (!objs) {
-                    //     objs = new Map();
-                    //     ref["objs"] = objs;
-                    //   }
-                    //   const seq = (objs["lastSeq"] || 0) + 1;
-                    //   objs["lastSeq"] = seq;
-                    //   args[i].seq = seq;
-                    //   args[i] = {
-                    //     seq: seq
-                    //   };
-                    // }
+                    else if (args[i] instanceof this.contextType) {
+                        const seq = ++this.lastRefID;
+                        // js: rewrite input Context().seq = seq
+                        args[i].seq = seq;
+                        // go: will create Context object from seq and put it in jsclient.refs
+                        args[i] = {
+                            seq: seq
+                        };
+                    }
                 }
                 // prepare (errors, results, lastSeq) on binding function
                 let errors = me["errors"];
@@ -213,6 +208,41 @@ var script = `var __awaiter = (this && this.__awaiter) || function (thisArg, _ar
                 return promise;
             });
         }
+        initContext() {
+            let $this = this;
+            // Context class
+            function Context() {
+                this.seq = -1; // this will be rewrite as refID
+                this.cancel = () => {
+                    let msg = {
+                        method: "Vuego.refCall",
+                        params: {
+                            seq: this.seq
+                        }
+                    };
+                    $this.ws.send(JSON.stringify(msg));
+                };
+                this.getThis = () => {
+                    return $this;
+                };
+            }
+            this.contextType = Context;
+            const TODO = new Context();
+            const Backgroud = new Context();
+            // context package
+            this.root.context = {
+                withCancel() {
+                    let ctx = new Context();
+                    return [ctx, ctx.cancel];
+                },
+                background() {
+                    return Backgroud;
+                },
+                todo() {
+                    return TODO;
+                }
+            };
+        }
     }
     function getparam(name, search) {
         search = search === undefined ? window.location.search : search;
@@ -232,11 +262,6 @@ var script = `var __awaiter = (this && this.__awaiter) || function (thisArg, _ar
             let ws = new WebSocket("ws://" + host + "/vuego");
             let vuego = new Vuego(ws);
             let api = yield vuego.attach();
-            try {
-            }
-            catch (ex) {
-                console.log("call error:", ex);
-            }
             let search = undefined;
             let win = window;
             let name = getparam("name", search);

@@ -2,6 +2,7 @@ package vuego
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 )
 
@@ -15,6 +16,9 @@ type Function struct {
 
 // close is called by page automatically
 func (c *Function) close() {
+	if c == nil {
+		return
+	}
 	_, err := c.jsc.send("Vuego.closeCallback", h{"name": c.BindingName, "seq": c.Seq}, false)
 	if err != nil {
 		log.Println("close callback failed:", err)
@@ -23,6 +27,9 @@ func (c *Function) close() {
 
 // Call method.
 func (c *Function) Call(args ...interface{}) Value {
+	if c == nil {
+		return value{err: fmt.Errorf("invalid callback")}
+	}
 	_, err := json.Marshal(args)
 	if err != nil {
 		return value{err: err}

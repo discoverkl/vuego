@@ -8,7 +8,10 @@ import (
 	"net/http"
 
 	"golang.org/x/net/websocket"
+	"github.com/discoverkl/vuego/one"
 )
+
+var dev = one.InDevMode("vuego")
 
 // Bind a api for javascript.
 func Bind(name string, f interface{}) {

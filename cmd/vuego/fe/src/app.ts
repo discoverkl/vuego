@@ -14,18 +14,30 @@ interface CallMessage {
   };
 }
 
+interface RefCallMessage {
+  id?: number;
+  method: string;
+  params: {
+    seq: number;
+  };
+}
+
 (function() {
   let dev = true;
 
   class Vuego {
     ws: WebSocket;
-    root: {};
+    root: any; // {}
     resolveAPI: any;
+    lastRefID: number;
+    contextType: any;
 
     constructor(ws: WebSocket) {
       this.ws = ws;
       this.root = {};
       this.resolveAPI = null;
+      this.lastRefID = 0;
+      this.initContext();
     }
 
     replymessage(id: number, ret?: any, err?: string) {
@@ -131,7 +143,6 @@ interface CallMessage {
     }
 
     bind(name: string) {
-      // const refBindingName = "%s";
       let root = this.root;
       const bindingName = name;
       root[bindingName] = async (...args) => {
@@ -147,26 +158,20 @@ interface CallMessage {
             }
             const seq = (callbacks["lastSeq"] || 0) + 1;
             callbacks["lastSeq"] = seq;
-            callbacks.set(seq, args[i]); // root[bindingName].functions[callbackSeq] = func value
+            callbacks.set(seq, args[i]); // root[bindingName].callbacks[callbackSeq] = func value
             args[i] = {
               bindingName: bindingName,
               seq: seq
             };
+          } else if (args[i] instanceof this.contextType) {
+            const seq = ++this.lastRefID;
+            // js: rewrite input Context().seq = seq
+            args[i].seq = seq;
+            // go: will create Context object from seq and put it in jsclient.refs
+            args[i] = {
+              seq: seq
+            };
           }
-          // else if (args[i] instanceof context.Context) {
-          //   const ref = root[refBindingName];
-          //   let objs = ref["objs"];
-          //   if (!objs) {
-          //     objs = new Map();
-          //     ref["objs"] = objs;
-          //   }
-          //   const seq = (objs["lastSeq"] || 0) + 1;
-          //   objs["lastSeq"] = seq;
-          //   args[i].seq = seq;
-          //   args[i] = {
-          //     seq: seq
-          //   };
-          // }
         }
 
         // prepare (errors, results, lastSeq) on binding function
@@ -201,6 +206,45 @@ interface CallMessage {
         return promise;
       };
     }
+
+    initContext() {
+      let $this = this;
+
+      // Context class
+      function Context() {
+        this.seq = -1; // this will be rewrite as refID
+        this.cancel = () => {
+          let msg: RefCallMessage = {
+            method: "Vuego.refCall",
+            params: {
+              seq: this.seq
+            }
+          };
+          $this.ws.send(JSON.stringify(msg));
+        };
+        this.getThis = () => {
+          return $this;
+        };
+      }
+      this.contextType = Context;
+
+      const TODO = new Context();
+      const Backgroud = new Context();
+
+      // context package
+      this.root.context = {
+        withCancel() {
+          let ctx = new Context();
+          return [ctx, ctx.cancel];
+        },
+        background() {
+          return Backgroud;
+        },
+        todo() {
+          return TODO;
+        }
+      };
+    }
   }
 
   function getparam(name: string, search?: string): string | undefined {
@@ -220,10 +264,6 @@ interface CallMessage {
     let ws = new WebSocket("ws://" + host + "/vuego");
     let vuego = new Vuego(ws);
     let api = await vuego.attach();
-    try {
-    } catch (ex) {
-      console.log("call error:", ex);
-    }
     let search = undefined;
     let win: any = window;
     let name = getparam("name", search);

@@ -37,6 +37,10 @@ type callParams struct {
 	Args []json.RawMessage `json:"args"`
 }
 
+type refCallParams struct {
+	Seq  int               `json:"seq"`
+}
+
 type h map[string]interface{}
 
 type jsClient struct {
@@ -45,6 +49,7 @@ type jsClient struct {
 	pending map[int]chan result
 	ws      *websocket.Conn
 	binding map[string]bindingFunc
+	refs map[int]func()				// int -> func()
 	done chan struct{}
 }
 
@@ -53,6 +58,7 @@ func newJSClient(ws *websocket.Conn) (*jsClient, error) {
 		ws:      ws,
 		pending: map[int]chan result{},
 		binding: map[string]bindingFunc{},
+		refs: map[int]func(){},
 		done: make(chan struct{}),
 	}
 	go p.readLoop()
@@ -71,7 +77,9 @@ func (p *jsClient) readLoop() {
 			log.Println("receive bad message:", err)
 			continue
 		}
-		// log.Printf("[receive] %s", m.Method)
+		if dev {
+			log.Printf("[receive] %s, param: %v", m.Method, string(m.Params))
+		}
 
 		switch m.Method {
 		case "1":
@@ -86,6 +94,7 @@ func (p *jsClient) readLoop() {
 			err := json.Unmarshal([]byte(m.Params), &ret)
 			if err != nil {
 				log.Println("Vuego.ret bad message:", err)
+				// DO NOT break
 			}
 
 			p.Lock()
@@ -111,6 +120,7 @@ func (p *jsClient) readLoop() {
 			err := json.Unmarshal([]byte(m.Params), &call)
 			if err != nil {
 				log.Println("Vuego.call bad message:", err)
+				break
 			}
 
 			p.Lock()
@@ -137,6 +147,19 @@ func (p *jsClient) readLoop() {
 					log.Println("binding call phrase 3 failed:", err)
 				}
 			}()
+		case "Vuego.refCall":
+			refCall := refCallParams{}
+			err := json.Unmarshal([]byte(m.Params), &refCall)
+			if err != nil {
+				log.Println("Vuego.refCall bad message:", err)
+				break
+			}
+			fn, ok := p.refs[refCall.Seq]
+			if !ok {
+				// log.Println("Vuego.refCall ignore late cancel")
+				break
+			}
+			fn()
 
 		default:
 			log.Println("unknown method:", m.Method)
@@ -145,7 +168,9 @@ func (p *jsClient) readLoop() {
 }
 
 func (p *jsClient) send(method string, params h, wait bool) (json.RawMessage, error) {
-	log.Printf("[send] method %s, wait=%v", method, wait)
+	if dev {
+		log.Printf("   [send] method %s, wait=%v", method, wait)
+	}
 	id := atomic.AddInt32(&p.id, 1)
 	m := h{"id": int(id), "method": method, "params": params}
 
@@ -195,4 +220,12 @@ func (p *jsClient) ready() error {
 		return err
 	}
 	return nil
+}
+
+func (p *jsClient) ref(seq int, fn func()) {
+	p.refs[seq] = fn
+}
+
+func (p *jsClient) unref(seq int) {
+	delete(p.refs, seq)
 }
