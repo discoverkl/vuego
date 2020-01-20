@@ -36,7 +36,7 @@ func newPage(ws *websocket.Conn) (Page, error) {
 }
 
 func (c *page) Bind(name string, f interface{}) error {
-	if err := checkBindFunc(f); err != nil {
+	if err := checkBindFunc(name, f); err != nil {
 		return err
 	}
 	v := reflect.ValueOf(f)
@@ -124,7 +124,10 @@ func (c *page) Ready() error {
 	return c.jsc.ready()
 }
 
-func checkBindFunc(f interface{}) error {
+func checkBindFunc(name string, f interface{}) error {
+	if name == ReadyFuncName {
+		return fmt.Errorf("binding name '%s' is reserved for internal use", name)
+	}
 	v := reflect.ValueOf(f)
 	if v.Kind() != reflect.Func {
 		return fmt.Errorf("f should be a function")

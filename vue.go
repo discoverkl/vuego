@@ -2,6 +2,7 @@ package vuego
 
 import (
 	"encoding/json"
+	"net"
 	"sync"
 	"fmt"
 	"log"
@@ -12,6 +13,9 @@ import (
 )
 
 var dev = one.InDevMode("vuego")
+
+// ReadyFuncName is an async ready function in api object.
+const ReadyFuncName = "Vuego"
 
 // Bind a api for javascript.
 func Bind(name string, f interface{}) {
@@ -31,7 +35,15 @@ func FileServer(root http.FileSystem, ops ...option) error {
 	}
 	HandleHTTP(conf.serverPath)
 	http.Handle("/", http.FileServer(root))
+	if conf.listener != nil {
+		return http.Serve(conf.listener, nil)		
+	}
 	return http.ListenAndServe(conf.addr, nil)
+}
+
+// Done chan is closed when some client had connected and all clients are gone now.
+func Done() <-chan struct{} {
+	return ins.Done()
 }
 
 // Addr option.
@@ -48,6 +60,13 @@ func ServerPath(path string) option {
 	}
 }
 
+// Listener option.
+func Listener(listener net.Listener) option {
+	return func (conf *config) {
+		conf.listener = listener
+	}
+}
+
 func HandleHTTP(serverPath string) {
 	once.Do(func() {
 		if serverPath == "" {
@@ -56,7 +75,7 @@ func HandleHTTP(serverPath string) {
 		if serverPath[0] != '/' {
 			panic("serverPath must start with '/'")
 		}
-		http.Handle(serverPath, websocket.Handler(pageServer))
+		http.Handle(serverPath, websocket.Handler(ins.pageServer))
 		http.HandleFunc(getScriptPath(serverPath), func(w http.ResponseWriter, req *http.Request) {
 			w.Header().Add("Content-Type", "text/javascript")
 			jsQuery := fmt.Sprintf("?%s", req.URL.RawQuery)
@@ -87,36 +106,56 @@ type option func(conf *config)
 type config struct {
 	addr string
 	serverPath string
+	listener net.Listener
 }
 
 type server struct {
+	wg sync.WaitGroup
 	binding map[string]interface{}
+
+	once sync.Once
+	started chan struct{}
+	done chan struct{}
 }
 
 func newServer() *server {
-	// TODO: handle script path
-	return &server{
+	s := &server{
 		binding: map[string]interface{}{},
+		started: make(chan struct{}),
+		done: make(chan struct{}),
 	}
+	go func() {
+		<-s.started
+		if dev {
+			log.Println("server active")
+		}
+		s.wg.Wait()
+		if dev {
+			log.Println("server done")
+		}
+		close(s.done)
+	}()
+	return s
+}
+
+func (s *server) Done() <-chan struct{} {
+	return s.done
 }
 
 func (s *server) Bind(name string, f interface{}) error {
-	if err := checkBindFunc(f); err != nil {
+	if err := checkBindFunc(name, f); err != nil {
 		return err
 	}
 	s.binding[name] = f
 	return nil
 }
 
-func init() {
-	ins = newServer()
-}
-
-func getScriptPath(serverPath string) string {
-	return fmt.Sprintf("%s.js", serverPath)
-}
-
-func pageServer(ws *websocket.Conn) {
+func (s *server) pageServer(ws *websocket.Conn) {
+	s.wg.Add(1)
+	s.once.Do(func() {
+		close(s.started)
+	})
+	defer s.wg.Done()
 	page, err := Attach(ws)
 	if err != nil {
 		log.Printf("attach websocket failed: %v", err)
@@ -138,4 +177,12 @@ func pageServer(ws *websocket.Conn) {
 
 	// wait
 	<-page.Done()
+}
+
+func init() {
+	ins = newServer()
+}
+
+func getScriptPath(serverPath string) string {
+	return fmt.Sprintf("%s.js", serverPath)
 }

@@ -7,6 +7,7 @@ import (
 
 func init() {
 	script = mapScript(script, "let dev = true", "let dev = false")
+	script = mapScript(script, "Vuego()", fmt.Sprintf("%s()", ReadyFuncName))
 }
 
 func mapScript(in, old, new string) string {
@@ -24,6 +25,7 @@ func mapScript(in, old, new string) string {
 	}
 	return ret
 }
+
 var script = `var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -38,10 +40,23 @@ var script = `var __awaiter = (this && this.__awaiter) || function (thisArg, _ar
     class Vuego {
         constructor(ws) {
             this.ws = ws;
-            this.root = {};
             this.resolveAPI = null;
             this.lastRefID = 0;
+            this.beforeReady = null;
+            const ready = new Promise((resolve, reject) => {
+                this.resolveAPI = resolve;
+            });
+            this.readyPromise = ready;
+            this.root = {
+                Vuego() {
+                    return ready;
+                }
+            };
+            this.attach();
             this.initContext();
+        }
+        getapi() {
+            return this.root;
         }
         replymessage(id, ret, err) {
             if (ret === undefined)
@@ -119,6 +134,9 @@ var script = `var __awaiter = (this && this.__awaiter) || function (thisArg, _ar
                     break;
                 }
                 case "Vuego.ready": {
+                    if (this.beforeReady !== null) {
+                        this.beforeReady();
+                    }
                     if (this.resolveAPI != null) {
                         this.resolveAPI(this.root);
                     }
@@ -127,24 +145,17 @@ var script = `var __awaiter = (this && this.__awaiter) || function (thisArg, _ar
             }
         }
         attach() {
-            return __awaiter(this, void 0, void 0, function* () {
-                let ws = this.ws;
-                ws.onmessage = this.onmessage.bind(this);
-                ws.onopen = e => {
-                    // ws.send(JSON.stringify({ method: "1" }));
-                };
-                ws.onerror = e => {
-                    console.log("ws error:", e);
-                };
-                ws.onclose = e => {
-                    console.log("ws close:", e);
-                };
-                // wait for ready
-                const promise = new Promise((resolve, reject) => {
-                    this.resolveAPI = resolve;
-                });
-                return promise;
-            });
+            let ws = this.ws;
+            ws.onmessage = this.onmessage.bind(this);
+            ws.onopen = e => {
+                // ws.send(JSON.stringify({ method: "1" }));
+            };
+            ws.onerror = e => {
+                console.log("ws error:", e);
+            };
+            ws.onclose = e => {
+                console.log("ws close:", e);
+            };
         }
         bind(name) {
             let root = this.root;
@@ -257,19 +268,21 @@ var script = `var __awaiter = (this && this.__awaiter) || function (thisArg, _ar
         return pair[1] || "";
     }
     function main() {
-        return __awaiter(this, void 0, void 0, function* () {
-            let host = window.location.host;
-            let ws = new WebSocket("ws://" + host + "/vuego");
-            let vuego = new Vuego(ws);
-            let api = yield vuego.attach();
+        let host = window.location.host;
+        let ws = new WebSocket("ws://" + host + "/vuego");
+        let vuego = new Vuego(ws);
+        let api = vuego.getapi();
+        let exportAPI = () => {
             let search = undefined;
-            let win = window;
             let name = getparam("name", search);
+            let win = window;
             if (name === undefined || name === "window")
                 Object.assign(win, api);
             else if (name)
                 win[name] = api;
-        });
+        };
+        vuego.beforeReady = exportAPI;
+        exportAPI();
     }
     main();
 })();

@@ -31,13 +31,30 @@ interface RefCallMessage {
     resolveAPI: any;
     lastRefID: number;
     contextType: any;
+    readyPromise: Promise<any>;
+    beforeReady: () => void;
 
     constructor(ws: WebSocket) {
       this.ws = ws;
-      this.root = {};
       this.resolveAPI = null;
       this.lastRefID = 0;
+      this.beforeReady = null;
+
+      const ready = new Promise((resolve, reject) => {
+        this.resolveAPI = resolve;
+      });
+      this.readyPromise = ready;
+      this.root = {
+        Vuego(): Promise<any> {
+          return ready;
+        }
+      };
+      this.attach();
       this.initContext();
+    }
+
+    getapi(): any {
+      return this.root;
     }
 
     replymessage(id: number, ret?: any, err?: string) {
@@ -111,6 +128,9 @@ interface RefCallMessage {
           break;
         }
         case "Vuego.ready": {
+          if (this.beforeReady !== null) {
+            this.beforeReady();
+          }
           if (this.resolveAPI != null) {
             this.resolveAPI(this.root);
           }
@@ -119,7 +139,7 @@ interface RefCallMessage {
       }
     }
 
-    async attach(): Promise<any> {
+    attach() {
       let ws = this.ws;
       ws.onmessage = this.onmessage.bind(this);
 
@@ -134,12 +154,6 @@ interface RefCallMessage {
       ws.onclose = e => {
         console.log("ws close:", e);
       };
-
-      // wait for ready
-      const promise = new Promise((resolve, reject) => {
-        this.resolveAPI = resolve;
-      });
-      return promise;
     }
 
     bind(name: string) {
@@ -259,16 +273,21 @@ interface RefCallMessage {
     return pair[1] || "";
   }
 
-  async function main() {
+  function main() {
     let host = window.location.host;
     let ws = new WebSocket("ws://" + host + "/vuego");
     let vuego = new Vuego(ws);
-    let api = await vuego.attach();
-    let search = undefined;
-    let win: any = window;
-    let name = getparam("name", search);
-    if (name === undefined || name === "window") Object.assign(win, api);
-    else if (name) win[name] = api;
+    let api = vuego.getapi();
+
+    let exportAPI = () => {
+      let search = undefined;
+      let name = getparam("name", search);
+      let win: any = window;
+      if (name === undefined || name === "window") Object.assign(win, api);
+      else if (name) win[name] = api;
+    };
+    vuego.beforeReady = exportAPI;
+    exportAPI();
   }
   main();
 })();
