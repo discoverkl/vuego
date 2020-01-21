@@ -24,7 +24,6 @@ interface RefCallMessage {
 
 (function() {
   let dev = true;
-
   class Vuego {
     ws: WebSocket;
     root: any; // {}
@@ -45,10 +44,11 @@ interface RefCallMessage {
       });
       this.readyPromise = ready;
       this.root = {
-        Vuego(): Promise<any> {
+        Vuego: function(): Promise<any> {
           return ready;
         }
       };
+      this.extendVuego(this.root.Vuego);
       this.attach();
       this.initContext();
     }
@@ -259,6 +259,12 @@ interface RefCallMessage {
         todo() {
           return TODO;
         }
+      };
+    }
+
+    extendVuego(Vuego: any) {
+      Vuego.self = () => {
+        return this;
       };
     }
   }

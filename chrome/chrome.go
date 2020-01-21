@@ -2,76 +2,62 @@ package chrome
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"runtime"
-	"sync"
 
 	"github.com/discoverkl/vuego"
 	"github.com/discoverkl/vuego/one"
+	"github.com/discoverkl/vuego/browser"
 )
 
 var dev = one.InDevMode("chrome")
 
+type config struct {
+	x          int
+	y          int
+	width      int
+	height     int
+	chromeArgs []string
+}
+
 type chromePage struct {
 	cmd        *exec.Cmd
 	chromeDone chan struct{}
-	closeOnce  sync.Once
-	done chan struct{}
+	conf       config
 }
 
-func NewPage(root http.FileSystem) (vuego.Window, error) {
-	return New(root, "", 0, 0, 0, 0)
-}
-
-func New(root http.FileSystem, dir string, x, y int, width, height int, customArgs ...string) (vuego.Window, error) {
-	// ** local server
-	listener, err := net.Listen("tcp", ":0")
-	if err != nil {
-		return nil, err
-	}
-	addr := listener.Addr().(*net.TCPAddr)
-	url := fmt.Sprintf("http://localhost:%d", addr.Port)
-	log.Println("using port:", addr.Port)
-	go vuego.FileServer(root, vuego.Listener(listener))
-
+func (c *chromePage) Open(url string) error {
 	// ** native window
-	var c *chromePage
+	var err error
+	x, y, width, height := c.conf.x, c.conf.y, c.conf.width, c.conf.height
 	var args []string
-	if width > 0 {
-		if dir == "" {
-			name, err := ioutil.TempDir("", "vuego-chrome")
-			if err != nil {
-				return nil, err
-			}
-			dir = name
-		}
-		args = append(defaultChromeArgs, fmt.Sprintf("--app=%s", url))
-		args = append(args, fmt.Sprintf("--user-data-dir=%s", dir))
-		args = append(args, fmt.Sprintf("--window-position=%d,%d", x, y))
-		args = append(args, fmt.Sprintf("--window-size=%d,%d", width, height))
-		args = append(args, customArgs...)
+	pageMode := (width == -1 && height == -1)
 
-		c, err = newChromeWithArgs(findChrome(), args...)
-	} else {
+	if pageMode {
 		args = append(args, url)
-		c, err = newChromeWithArgs(findChrome(), args...)
-	}
-	if err != nil {
-		return nil, err
+		c.cmd, err = newChromeWithArgs(findChrome(), args...)
+
+	} else {
+		// if dir == "" {
+		// 	name, err := ioutil.TempDir("", "vuego-chrome")
+		// 	if err != nil {
+		// 		return nil, err
+		// 	}
+		// 	dir = name
+		// }
+		args = append(defaultAppArgs, fmt.Sprintf("--app=%s", url))
+		// args = append(args, fmt.Sprintf("--user-data-dir=%s", dir))
+		args = append(args, fmt.Sprintf("--window-position=%d,%d", x, y))
+		args = append(args, fmt.Sprintf("--window-size='%d,%d'", width, height))
+		args = append(args, c.conf.chromeArgs...)
+
+		c.cmd, err = newChromeWithArgs(findChrome(), args...)
 	}
 
-	// done = vuego.Done
-	go func() {
-		<-vuego.Done()
-		c.Close()	// will close(c.done)
-	}()
-
-	// done = chrome gone
+	// subprocess waiter
 	go func() {
 		err := c.cmd.Wait()
 		if dev {
@@ -80,74 +66,71 @@ func New(root http.FileSystem, dir string, x, y int, width, height int, customAr
 		close(c.chromeDone)
 	}()
 
-	return c, nil
+	return err
 }
 
-func newChromeWithArgs(chromeBinary string, args ...string) (*chromePage, error) {
+func (c *chromePage) Close() {
+	c.ensureAppClosed()
+}
+
+
+func NewPage(root http.FileSystem) (vuego.Window, error) {
+	return NewApp(root, 0, 0, -1, -1)
+}
+
+func NewApp(root http.FileSystem, x, y int, width, height int, chromeArgs ...string) (vuego.Window, error) {
+	conf := config{x, y, width, height, chromeArgs}
+	c := &chromePage{
+		cmd: nil,
+		chromeDone: make(chan struct{}),
+		conf: conf,
+	}
+	return browser.NewNativeWindow(root, c)
+}
+
+func newChromeWithArgs(chromeBinary string, args ...string) (*exec.Cmd, error) {
+	if dev {
+		log.Println("[chrome-args]:", args)
+	}
 	if chromeBinary == "" {
 		return nil, fmt.Errorf("could not find chrome in your system")
 	}
-	c := &chromePage{
-		cmd:        exec.Command(chromeBinary, args...),
-		chromeDone: make(chan struct{}),
-		done: make(chan struct{}),
-	}
 
-	if err := c.cmd.Start(); err != nil {
+	cmd := exec.Command(chromeBinary, args...)
+	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
-	log.Println("pid:", c.cmd.Process.Pid)
+	log.Println("pid:", cmd.Process.Pid)
 
-	return c, nil
+	return cmd, nil
 }
 
-func (c *chromePage) Bind(name string, f interface{}) error {
-	panic("Not Implemented")
-}
-
-func (c *chromePage) Eval(js string) vuego.Value {
-	panic("Not Implemented")
-}
-
-func (c *chromePage) Done() <-chan struct{} {
-	return c.done
-}
-
-func (c *chromePage) Close() error {
-	c.closeOnce.Do(func() {
-		if dev {
-			log.Println("chromePage.Close called")
+// for some app only, not page ( chrome subprocess id is not stable )
+func (c *chromePage) ensureAppClosed() {
+	// close chrome process (for app mode)
+	if state := c.cmd.ProcessState; state == nil || !state.Exited() {
+		err := c.cmd.Process.Signal(os.Interrupt) // DO NOT kill -> enable gracefully exit
+		if err != nil {
+			log.Println("kill chrome process error:", err)
 		}
-		// close chrome process (for app mode)
-		if state := c.cmd.ProcessState; state == nil || !state.Exited() {
-			err := c.cmd.Process.Signal(os.Interrupt) // DO NOT kill -> enable gracefully exit
-			if err != nil {
-				log.Println("kill chrome process error:", err)
-			}
-		}
-		//TODO: timeout and force kill
-		<-c.chromeDone
-
-		// close local server
-		close(c.done)
-
-		//TODO: close client pages when connection lost
-	})
-	return nil
+	}
+	//TODO: timeout and force kill
+	<-c.chromeDone
 }
 
 //
 // tool functions
 //
 
-var defaultChromeArgs = []string{
-	"--disable-background-networking",
-	"--disable-background-timer-throttling",
-	"--disable-backgrounding-occluded-windows",
-	"--disable-breakpad",
-	"--disable-client-side-phishing-detection",
+// https://peter.sh/experiments/chromium-command-line-switches/
+var defaultAppArgs = []string{
+	// "--disable-background-networking",
+	// "--disable-background-timer-throttling",
+	// "--disable-backgrounding-occluded-windows",
+	// "--disable-breakpad",
+	// "--disable-client-side-phishing-detection",
 	"--disable-default-apps",
-	"--disable-dev-shm-usage",
+	// "--disable-dev-shm-usage",
 	"--disable-infobars",
 	"--disable-extensions",
 	"--disable-features=site-per-process",
@@ -155,15 +138,17 @@ var defaultChromeArgs = []string{
 	"--disable-ipc-flooding-protection",
 	"--disable-popup-blocking",
 	"--disable-prompt-on-repost",
-	"--disable-renderer-backgrounding",
+	// "--disable-renderer-backgrounding",
 	"--disable-sync",
 	"--disable-translate",
-	"--metrics-recording-only",
-	"--no-first-run",
+	// "--metrics-recording-only",
+	// "--no-first-run",
 	"--safebrowsing-disable-auto-update",
-	"--enable-automation",
-	"--password-store=basic",
-	"--use-mock-keychain",
+	// "--enable-automation",
+	// "--password-store=basic",
+	// "--use-mock-keychain",
+
+	"--disable-device-discovery-notifications",
 }
 
 func findChrome() string {

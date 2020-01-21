@@ -2,6 +2,7 @@ package vuego
 
 import (
 	"encoding/json"
+	"context"
 	"errors"
 	"io"
 	"log"
@@ -50,7 +51,8 @@ type jsClient struct {
 	ws      *websocket.Conn
 	binding map[string]bindingFunc
 	refs map[int]func()				// int -> func()
-	done chan struct{}
+	done chan struct{}				// done = readLoop() return = receive EOF
+	cancel context.CancelFunc
 }
 
 func newJSClient(ws *websocket.Conn) (*jsClient, error) {
@@ -61,17 +63,32 @@ func newJSClient(ws *websocket.Conn) (*jsClient, error) {
 		refs: map[int]func(){},
 		done: make(chan struct{}),
 	}
-	go p.readLoop()
+	ctx, cancel := context.WithCancel(context.Background())
+	p.cancel = cancel
+	go p.readLoop(ctx)
 	return p, nil
 }
 
-func (p *jsClient) readLoop() {
+func (p *jsClient) readLoop(ctx context.Context) {
 	defer close(p.done)
+
+	// connection closer
+	go func() {
+		select {
+		case <-ctx.Done():
+			p.ws.Close()
+		}
+	}()
+
 	for {
 		m := msg{}
 		if err := websocket.JSON.Receive(p.ws, &m); err != nil {
 			if errors.Is(err, io.EOF) {
 				log.Println("remote closed")
+				return
+			}
+			if ctx.Err() != nil {
+				// cancel
 				return
 			}
 			log.Println("receive bad message:", err)

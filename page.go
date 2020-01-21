@@ -14,13 +14,13 @@ import (
 type Page interface {
 	Bind(name string, f interface{}) error
 	Eval(js string) Value
+	SetReady() error // nofity server ready ( all functions binded )
+	Close()
 	Done() <-chan struct{}
-	Ready() error // nofity server ready ( all functions binded )
 }
 
 type page struct {
 	jsc *jsClient
-	// done chan struct{}
 }
 
 func newPage(ws *websocket.Conn) (Page, error) {
@@ -28,11 +28,11 @@ func newPage(ws *websocket.Conn) (Page, error) {
 	if err != nil {
 		return nil, err
 	}
-	ui := &page{
+	p := &page{
 		jsc: jsc,
 		// done: make(chan struct{}),
 	}
-	return ui, nil
+	return p, nil
 }
 
 func (c *page) Bind(name string, f interface{}) error {
@@ -116,12 +116,17 @@ func (c *page) Eval(js string) Value {
 	return value{err: err, raw: v}
 }
 
-func (c *page) Done() <-chan struct{} {
-	return c.jsc.done
+func (c *page) SetReady() error {
+	return c.jsc.ready()
 }
 
-func (c *page) Ready() error {
-	return c.jsc.ready()
+func (c *page) Close() {
+	c.jsc.cancel()
+}
+
+// Done = jsClient done
+func (c *page) Done() <-chan struct{} {
+	return c.jsc.done
 }
 
 func checkBindFunc(name string, f interface{}) error {

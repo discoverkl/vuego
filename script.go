@@ -48,10 +48,11 @@ var script = `var __awaiter = (this && this.__awaiter) || function (thisArg, _ar
             });
             this.readyPromise = ready;
             this.root = {
-                Vuego() {
+                Vuego: function () {
                     return ready;
                 }
             };
+            this.extendVuego(this.root.Vuego);
             this.attach();
             this.initContext();
         }
@@ -254,6 +255,11 @@ var script = `var __awaiter = (this && this.__awaiter) || function (thisArg, _ar
                 todo() {
                     return TODO;
                 }
+            };
+        }
+        extendVuego(Vuego) {
+            Vuego.self = () => {
+                return this;
             };
         }
     }

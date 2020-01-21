@@ -2,15 +2,16 @@ package vuego
 
 import (
 	"encoding/json"
-	"time"
-	"net"
-	"sync"
+	"context"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
+	"sync"
+	"time"
 
-	"golang.org/x/net/websocket"
 	"github.com/discoverkl/vuego/one"
+	"golang.org/x/net/websocket"
 )
 
 var dev = one.InDevMode("vuego")
@@ -20,111 +21,59 @@ const ReadyFuncName = "Vuego"
 
 // Bind a api for javascript.
 func Bind(name string, f interface{}) {
-	err := ins.Bind(name, f)
+	err := DefaultServer.Bind(name, f)
 	if err != nil {
 		panic(err)
 	}
 }
 
-func FileServer(root http.FileSystem, ops ...option) error {
-	conf := &config{
-		addr: ":80",
-		serverPath: "",
-	}
-	for _, op := range ops {
-		op(conf)
-	}
-	HandleHTTP(conf.serverPath)
-	http.Handle("/", http.FileServer(root))
-	if conf.listener != nil {
-		return http.Serve(conf.listener, nil)		
-	}
-	return http.ListenAndServe(conf.addr, nil)
-}
-
 // Done chan is closed when some client had connected and all clients are gone now.
 func Done() <-chan struct{} {
-	return ins.Done()
+	return DefaultServer.Done()
 }
 
-// Addr option.
-func Addr(addr string) option {
-	return func (conf *config) {
-		conf.addr = addr
-	}
+func ListenAndServe(addr string, root http.FileSystem) error {
+	DefaultServer.root = root
+	DefaultServer.Addr = addr
+	return DefaultServer.ListenAndServe()
 }
 
-// ServerPath option.
-func ServerPath(path string) option {
-	return func (conf *config) {
-		conf.serverPath = path
-	}
-}
-
-// Listener option.
-func Listener(listener net.Listener) option {
-	return func (conf *config) {
-		conf.listener = listener
-	}
-}
-
-//TODO: DO NOT use global http.Handle
-func HandleHTTP(serverPath string) {
-	once.Do(func() {
-		if serverPath == "" {
-			serverPath = defaultServerPath
-		}
-		if serverPath[0] != '/' {
-			panic("serverPath must start with '/'")
-		}
-		http.Handle(serverPath, websocket.Handler(ins.pageServer))
-		http.HandleFunc(getScriptPath(serverPath), func(w http.ResponseWriter, req *http.Request) {
-			w.Header().Add("Content-Type", "text/javascript")
-			jsQuery := fmt.Sprintf("?%s", req.URL.RawQuery)
-			bytes, _ := json.Marshal(jsQuery)
-
-			clientScript := mapScript(script, "/vuego", serverPath)
-			clientScript = mapScript(clientScript, "let search = undefined", fmt.Sprintf("let search = %s", string(bytes)))
-			fmt.Fprint(w, clientScript)
-		})
-	})
-}
-
-// Attach a websocket connection.
-func Attach(ws *websocket.Conn) (Page, error) {
-	page, err := newPage(ws)
-	if err != nil {
-		return nil, fmt.Errorf("create page error: %v", err)
-	}
-	return page, nil
-}
-
+var DefaultServer *FileServer
 var defaultServerPath = "/vuego"
 var once sync.Once
-var ins *server
 
-type option func(conf *config)
-
-type config struct {
-	addr string
-	serverPath string
-	listener net.Listener
+func init() {
+	DefaultServer = NewFileServer(nil)
 }
 
-type server struct {
-	wg sync.WaitGroup
+type FileServer struct {
+	Addr       string
+	ServerPath string
+	Listener   net.Listener
+	root       http.FileSystem // optional for default instance
+
+	server   *http.Server
+	serveMux *http.ServeMux
+
 	binding map[string]interface{}
 
-	once sync.Once
-	started chan struct{}
-	done chan struct{}
+	// local server done
+	wg              sync.WaitGroup
+	once            sync.Once
+	started         chan struct{}
+	localServerDone chan struct{}
+	doneOnce        sync.Once
 }
 
-func newServer() *server {
-	s := &server{
-		binding: map[string]interface{}{},
-		started: make(chan struct{}),
-		done: make(chan struct{}),
+func NewFileServer(root http.FileSystem) *FileServer {
+	serveMux := http.NewServeMux()
+	s := &FileServer{
+		root:            root,
+		serveMux:        serveMux,
+		server:          &http.Server{Handler: serveMux},
+		binding:         map[string]interface{}{},
+		started:         make(chan struct{}),
+		localServerDone: make(chan struct{}),
 	}
 	go func() {
 		<-s.started
@@ -135,16 +84,68 @@ func newServer() *server {
 		if dev {
 			log.Println("server done")
 		}
-		close(s.done)
+		s.closeLocalServer()
 	}()
 	return s
 }
 
-func (s *server) Done() <-chan struct{} {
-	return s.done
+func (s *FileServer) ListenAndServe() error {
+	s.handleVuego()
+
+	s.serveMux.Handle("/", http.FileServer(s.root))
+	if s.Listener != nil {
+		return s.server.Serve(s.Listener)
+	}
+	addr := s.Addr
+	if addr == "" {
+		addr = ":80"
+	}
+	s.server.Addr = addr
+	return s.server.ListenAndServe()
 }
 
-func (s *server) Bind(name string, f interface{}) error {
+func (s *FileServer) Shutdown(ctx context.Context) error {
+	s.closeLocalServer()
+	return s.server.Shutdown(context.Background())
+}
+
+func (s *FileServer) Close() error {
+	s.closeLocalServer()
+	return s.server.Close()
+}
+
+func (s *FileServer) closeLocalServer() {
+	s.doneOnce.Do(func() {
+		close(s.localServerDone)
+	})
+}
+
+func (s *FileServer) handleVuego() {
+	serverPath := s.ServerPath
+	if serverPath == "" {
+		serverPath = defaultServerPath
+	}
+	if serverPath[0] != '/' {
+		panic("serverPath must start with '/'")
+	}
+
+	s.serveMux.Handle(serverPath, websocket.Handler(s.serveClientConn))
+	s.serveMux.HandleFunc(getScriptPath(serverPath), func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Add("Content-Type", "text/javascript")
+		jsQuery := fmt.Sprintf("?%s", req.URL.RawQuery)
+		bytes, _ := json.Marshal(jsQuery)
+
+		clientScript := mapScript(script, "/vuego", serverPath)
+		clientScript = mapScript(clientScript, "let search = undefined", fmt.Sprintf("let search = %s", string(bytes)))
+		fmt.Fprint(w, clientScript)
+	})
+}
+
+func (s *FileServer) Done() <-chan struct{} {
+	return s.localServerDone
+}
+
+func (s *FileServer) Bind(name string, f interface{}) error {
 	if err := checkBindFunc(name, f); err != nil {
 		return err
 	}
@@ -152,40 +153,39 @@ func (s *server) Bind(name string, f interface{}) error {
 	return nil
 }
 
-func (s *server) pageServer(ws *websocket.Conn) {
+// ready(0) -> started(1+) -> done(0)
+func (s *FileServer) serveClientConn(ws *websocket.Conn) {
 	s.wg.Add(1)
 	defer func() {
-		<- time.After(time.Millisecond * 200)		// support fast page refresh
+		<-time.After(time.Millisecond * 200) // support fast page refresh
 		s.wg.Done()
 	}()
+
 	s.once.Do(func() {
 		close(s.started)
 	})
-	page, err := Attach(ws)
+
+	p, err := newPage(ws)
 	if err != nil {
 		log.Printf("attach websocket failed: %v", err)
 	}
 
 	// bind api
-	for name, f := range ins.binding {
-		err := page.Bind(name, f)
+	for name, f := range s.binding {
+		err := p.Bind(name, f)
 		if err != nil {
 			log.Printf("bind api %s failed: %v", name, err)
 		}
 	}
 
 	// server ready
-	err = page.Ready()
+	err = p.SetReady()
 	if err != nil {
 		log.Printf("failed to make page ready: %v", err)
 	}
 
 	// wait
-	<-page.Done()
-}
-
-func init() {
-	ins = newServer()
+	<-p.Done()
 }
 
 func getScriptPath(serverPath string) string {

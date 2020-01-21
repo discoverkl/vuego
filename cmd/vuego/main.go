@@ -32,7 +32,7 @@ func main() {
 	vuego.Bind("add", add)
 	vuego.Bind("timer", timer)
 
-	if err := vuego.FileServer(http.Dir("./fe/dist"), vuego.Addr(":8000")); err != nil {
+	if err := vuego.ListenAndServe(":8000", http.Dir("./fe/dist")); err != nil {
 		log.Fatal(err)
 	}
 
