@@ -1,4 +1,4 @@
-//go:generate go run github.com/markbates/pkger/cmd/pkger -o examples/helloworld
+//go:generate go run github.com/markbates/pkger/cmd/pkger -o examples
 package main
 
 import (

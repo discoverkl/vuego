@@ -1,4 +1,4 @@
-//go:generate go run github.com/markbates/pkger/cmd/pkger -o examples/counter
+//go:generate go run github.com/markbates/pkger/cmd/pkger -o examples
 package main
 
 import (
