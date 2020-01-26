@@ -16,8 +16,8 @@ func add(a, b int) int {
 }
 
 func main() {
-	win, err := chrome.NewApp(pkger.Dir("/examples/native/fe/dist"), 200, 200, 800, 600)
-	// win, err := browser.NewPage(pkger.Dir("/examples/native/fe/dist"))
+	win, err := chrome.NewApp(pkger.Dir("/examples/helloworld/fe/dist"), 200, 200, 800, 600)
+	// win, err := browser.NewPage(pkger.Dir("/examples/helloworld/fe/dist"))
 	if err != nil {
 		log.Fatal(err)
 	}
