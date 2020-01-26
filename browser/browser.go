@@ -42,7 +42,7 @@ func NewPage(root http.FileSystem) (vuego.Window, error) {
 
 func NewNativeWindow(root http.FileSystem, win NativeWindow) (vuego.Window, error) {
 	// ** local server
-	listener, err := net.Listen("tcp", ":0")
+	listener, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		return nil, err
 	}

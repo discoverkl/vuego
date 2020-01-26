@@ -2,6 +2,7 @@ package chrome
 
 import (
 	"fmt"
+	"path/filepath"
 	"log"
 	"net/http"
 	"os"
@@ -9,8 +10,9 @@ import (
 	"runtime"
 
 	"github.com/discoverkl/vuego"
-	"github.com/discoverkl/vuego/one"
 	"github.com/discoverkl/vuego/browser"
+	"github.com/discoverkl/vuego/homedir"
+	"github.com/discoverkl/vuego/one"
 )
 
 var dev = one.InDevMode("chrome")
@@ -41,17 +43,20 @@ func (c *chromePage) Open(url string) error {
 		c.cmd, err = newChromeWithArgs(findChrome(), args...)
 
 	} else {
-		// if dir == "" {
-		// 	name, err := ioutil.TempDir("", "vuego-chrome")
-		// 	if err != nil {
-		// 		return nil, err
-		// 	}
-		// 	dir = name
-		// }
+		// use fix data dir for chrome app
+		dir, err := homedir.Dir()
+		if err != nil {
+			return err
+		}
+		dir = filepath.Join(dir, "vuego-chrome")
+		if dev {
+			log.Printf("user data dir: %s", dir)
+		}
+
 		args = append(defaultAppArgs, fmt.Sprintf("--app=%s", url))
-		// args = append(args, fmt.Sprintf("--user-data-dir=%s", dir))
+		args = append(args, fmt.Sprintf("--user-data-dir=%s", dir))
 		args = append(args, fmt.Sprintf("--window-position=%d,%d", x, y))
-		args = append(args, fmt.Sprintf("--window-size='%d,%d'", width, height))
+		args = append(args, fmt.Sprintf("--window-size=%d,%d", width, height))
 		args = append(args, c.conf.chromeArgs...)
 
 		c.cmd, err = newChromeWithArgs(findChrome(), args...)
@@ -73,7 +78,6 @@ func (c *chromePage) Close() {
 	c.ensureAppClosed()
 }
 
-
 func NewPage(root http.FileSystem) (vuego.Window, error) {
 	return NewApp(root, 0, 0, -1, -1)
 }
@@ -81,9 +85,9 @@ func NewPage(root http.FileSystem) (vuego.Window, error) {
 func NewApp(root http.FileSystem, x, y int, width, height int, chromeArgs ...string) (vuego.Window, error) {
 	conf := config{x, y, width, height, chromeArgs}
 	c := &chromePage{
-		cmd: nil,
+		cmd:        nil,
 		chromeDone: make(chan struct{}),
-		conf: conf,
+		conf:       conf,
 	}
 	return browser.NewNativeWindow(root, c)
 }

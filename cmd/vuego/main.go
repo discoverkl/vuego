@@ -9,7 +9,7 @@ import (
 	"github.com/discoverkl/vuego"
 )
 
-func add(a, b int) int {
+func sum(a, b int) int {
 	return a + b
 }
 
@@ -29,7 +29,7 @@ func timer(ctx context.Context, write *vuego.Function) string {
 }
 
 func main() {
-	vuego.Bind("add", add)
+	vuego.Bind("sum", sum)
 	vuego.Bind("timer", timer)
 
 	if err := vuego.ListenAndServe(":8000", http.Dir("./fe/dist")); err != nil {
