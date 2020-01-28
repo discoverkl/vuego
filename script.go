@@ -2,12 +2,32 @@ package vuego
 
 import (
 	"fmt"
+	"encoding/json"
 	"strings"
 )
 
+type jsOption struct {
+	Dev bool `json:"dev"`
+	ReadyFuncName string `json:"readyFuncName"`
+	Prefix string `json:"prefix"`
+	Search string `json:"search"`
+	Bindings []string `json:"bindings"`
+}
+
 func init() {
-	script = mapScript(script, "let dev = true", "let dev = false")
-	script = mapScript(script, "Vuego()", fmt.Sprintf("%s()", ReadyFuncName))
+	// script = mapScript(script, "let dev = true", "let dev = false")
+	// script = mapScript(script, "Vuego()", fmt.Sprintf("%s()", ReadyFuncName))
+}
+
+func injectOptions(op *jsOption) string {
+	if op == nil {
+		op = &jsOption{}
+	}
+	op.Dev = false	
+	op.ReadyFuncName = ReadyFuncName
+	raw, _ := json.MarshalIndent(op, "    ", "    ")
+	text := string(raw)
+	return mapScript(script, "options = null", fmt.Sprintf("options = %s", text))
 }
 
 func mapScript(in, old, new string) string {
@@ -36,25 +56,56 @@ var script = `var __awaiter = (this && this.__awaiter) || function (thisArg, _ar
     });
 };
 (function () {
-    let dev = true;
+    let options;
+    // inject server options here
+    options = null;
+    if (options === null) {
+        options = {
+            dev: true,
+            readyFuncName: "Vuego",
+            prefix: "",
+            search: "",
+            bindings: []
+        };
+    }
+    let dev = options.dev;
     class Vuego {
         constructor(ws) {
             this.ws = ws;
             this.resolveAPI = null;
             this.lastRefID = 0;
             this.beforeReady = null;
+            this.buildRoot();
+            this.attach();
+            this.initContext();
+        }
+        buildRoot() {
+            let root = {};
             const ready = new Promise((resolve, reject) => {
                 this.resolveAPI = resolve;
             });
-            this.readyPromise = ready;
-            this.root = {
-                Vuego: function () {
-                    return ready;
-                }
+            // root[options.readyFuncName] = () => ready;
+            root[options.readyFuncName] = {};
+            for (const name of options.bindings) {
+                let placeholder = function () {
+                    return __awaiter(this, arguments, void 0, function* () {
+                        yield ready;
+                        if (root[name] === placeholder) {
+                            throw new Error("binding is not ready: " + name);
+                            return;
+                        }
+                        return yield root[name](...arguments);
+                    });
+                };
+                root[name] = placeholder;
+            }
+            this.extendVuego(root[options.readyFuncName]);
+            this.root = root;
+        }
+        extendVuego(Vuego) {
+            Vuego.self = () => {
+                return this;
             };
-            this.extendVuego(this.root.Vuego);
-            this.attach();
-            this.initContext();
         }
         getapi() {
             return this.root;
@@ -139,7 +190,7 @@ var script = `var __awaiter = (this && this.__awaiter) || function (thisArg, _ar
                         this.beforeReady();
                     }
                     if (this.resolveAPI != null) {
-                        this.resolveAPI(this.root);
+                        this.resolveAPI();
                     }
                     break;
                 }
@@ -257,11 +308,6 @@ var script = `var __awaiter = (this && this.__awaiter) || function (thisArg, _ar
                 }
             };
         }
-        extendVuego(Vuego) {
-            Vuego.self = () => {
-                return this;
-            };
-        }
     }
     function getparam(name, search) {
         search = search === undefined ? window.location.search : search;
@@ -277,12 +323,11 @@ var script = `var __awaiter = (this && this.__awaiter) || function (thisArg, _ar
     }
     function main() {
         let host = window.location.host;
-        let ws = new WebSocket("ws://" + host + "/vuego");
+        let ws = new WebSocket("ws://" + host + options.prefix + "/vuego");
         let vuego = new Vuego(ws);
         let api = vuego.getapi();
         let exportAPI = () => {
-            let search = undefined;
-            let name = getparam("name", search);
+            let name = getparam("name", options.search);
             let win = window;
             if (name === undefined || name === "window")
                 Object.assign(win, api);

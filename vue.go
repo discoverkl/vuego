@@ -1,12 +1,12 @@
 package vuego
 
 import (
-	"encoding/json"
 	"context"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,6 +18,8 @@ var dev = one.InDevMode("vuego")
 
 // ReadyFuncName is an async ready function in api object.
 const ReadyFuncName = "Vuego"
+
+var Prefix string
 
 // Bind a api for javascript.
 func Bind(name string, f interface{}) {
@@ -33,6 +35,7 @@ func Done() <-chan struct{} {
 }
 
 func ListenAndServe(addr string, root http.FileSystem) error {
+	DefaultServer.Prefix = Prefix
 	DefaultServer.root = root
 	DefaultServer.Addr = addr
 	return DefaultServer.ListenAndServe()
@@ -51,6 +54,7 @@ type FileServer struct {
 	ServerPath string
 	Listener   net.Listener
 	root       http.FileSystem // optional for default instance
+	Prefix     string          // path prefix
 
 	server   *http.Server
 	serveMux *http.ServeMux
@@ -90,9 +94,15 @@ func NewFileServer(root http.FileSystem) *FileServer {
 }
 
 func (s *FileServer) ListenAndServe() error {
-	s.handleVuego()
+	prefix := s.Prefix
+	if prefix != "" && prefix[0] != '/' {
+		panic(fmt.Sprintf("Prefix must start with '/', got: %s", prefix))
+	}
+	prefix = strings.TrimRight(prefix, "/")
 
-	s.serveMux.Handle("/", http.FileServer(s.root))
+	s.handleVuego(prefix)
+
+	s.serveMux.Handle(prefix+"/", http.StripPrefix(prefix, http.FileServer(s.root)))
 	if s.Listener != nil {
 		return s.server.Serve(s.Listener)
 	}
@@ -120,7 +130,7 @@ func (s *FileServer) closeLocalServer() {
 	})
 }
 
-func (s *FileServer) handleVuego() {
+func (s *FileServer) handleVuego(prefix string) {
 	serverPath := s.ServerPath
 	if serverPath == "" {
 		serverPath = defaultServerPath
@@ -129,16 +139,26 @@ func (s *FileServer) handleVuego() {
 		panic("serverPath must start with '/'")
 	}
 
-	s.serveMux.Handle(serverPath, websocket.Handler(s.serveClientConn))
-	s.serveMux.HandleFunc(getScriptPath(serverPath), func(w http.ResponseWriter, req *http.Request) {
+	s.serveMux.Handle(prefix+serverPath, http.StripPrefix(prefix, websocket.Handler(s.serveClientConn)))
+	s.serveMux.Handle(prefix+getScriptPath(serverPath), http.StripPrefix(prefix, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Add("Content-Type", "text/javascript")
 		jsQuery := fmt.Sprintf("?%s", req.URL.RawQuery)
-		bytes, _ := json.Marshal(jsQuery)
+		// bytes, _ := json.Marshal(jsQuery)
 
-		clientScript := mapScript(script, "/vuego", serverPath)
-		clientScript = mapScript(clientScript, "let search = undefined", fmt.Sprintf("let search = %s", string(bytes)))
+		names := []string{}
+		for name, _ := range s.binding {
+			names = append(names, name)
+		}
+
+		clientScript := injectOptions(&jsOption{
+			Prefix: prefix,
+			Search: jsQuery,
+			Bindings: names,
+		})
+		// clientScript = mapScript(clientScript, `"/vuego"`, fmt.Sprintf(`"%s"`, prefix + serverPath))
+		// clientScript = mapScript(clientScript, "let search = undefined", fmt.Sprintf("let search = %s", string(bytes)))
 		fmt.Fprint(w, clientScript)
-	})
+	})))
 }
 
 func (s *FileServer) Done() <-chan struct{} {

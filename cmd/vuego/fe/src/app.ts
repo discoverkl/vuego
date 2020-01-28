@@ -22,15 +22,34 @@ interface RefCallMessage {
   };
 }
 
+interface Option {
+  dev: boolean;
+  readyFuncName: string; // bind name for ready function
+  prefix: string; // publicPath
+  search: string; // search string used to fetch this script
+  bindings: string[]; // server binding names
+}
+
 (function() {
-  let dev = true;
+  let options: Option;
+  // inject server options here
+  options = null;
+  if (options === null) {
+    options = {
+      dev: true,
+      readyFuncName: "Vuego",
+      prefix: "",
+      search: "",
+      bindings: []
+    };
+  }
+  let dev = options.dev;
   class Vuego {
     ws: WebSocket;
     root: any; // {}
     resolveAPI: any;
     lastRefID: number;
     contextType: any;
-    readyPromise: Promise<any>;
     beforeReady: () => void;
 
     constructor(ws: WebSocket) {
@@ -39,18 +58,37 @@ interface RefCallMessage {
       this.lastRefID = 0;
       this.beforeReady = null;
 
+      this.buildRoot();
+      this.attach();
+      this.initContext();
+    }
+
+    buildRoot(): void {
+      let root = {};
       const ready = new Promise((resolve, reject) => {
         this.resolveAPI = resolve;
       });
-      this.readyPromise = ready;
-      this.root = {
-        Vuego: function(): Promise<any> {
-          return ready;
-        }
+      // root[options.readyFuncName] = () => ready;
+      root[options.readyFuncName] = {};
+      for (const name of options.bindings) {
+        let placeholder = async function() {
+          await ready;
+          if (root[name] === placeholder) {
+            throw new Error("binding is not ready: " + name);
+            return;
+          }
+          return await root[name](...arguments);
+        };
+        root[name] = placeholder;
+      }
+      this.extendVuego(root[options.readyFuncName]);
+      this.root = root;
+    }
+
+    extendVuego(Vuego: any) {
+      Vuego.self = () => {
+        return this;
       };
-      this.extendVuego(this.root.Vuego);
-      this.attach();
-      this.initContext();
     }
 
     getapi(): any {
@@ -132,7 +170,7 @@ interface RefCallMessage {
             this.beforeReady();
           }
           if (this.resolveAPI != null) {
-            this.resolveAPI(this.root);
+            this.resolveAPI();
           }
           break;
         }
@@ -261,12 +299,6 @@ interface RefCallMessage {
         }
       };
     }
-
-    extendVuego(Vuego: any) {
-      Vuego.self = () => {
-        return this;
-      };
-    }
   }
 
   function getparam(name: string, search?: string): string | undefined {
@@ -283,13 +315,12 @@ interface RefCallMessage {
 
   function main() {
     let host = window.location.host;
-    let ws = new WebSocket("ws://" + host + "/vuego");
+    let ws = new WebSocket("ws://" + host + options.prefix + "/vuego");
     let vuego = new Vuego(ws);
     let api = vuego.getapi();
 
     let exportAPI = () => {
-      let search = undefined;
-      let name = getparam("name", search);
+      let name = getparam("name", options.search);
       let win: any = window;
       if (name === undefined || name === "window") Object.assign(win, api);
       else if (name) win[name] = api;
