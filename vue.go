@@ -99,6 +99,9 @@ func (s *FileServer) ListenAndServe() error {
 		panic(fmt.Sprintf("Prefix must start with '/', got: %s", prefix))
 	}
 	prefix = strings.TrimRight(prefix, "/")
+	if dev {
+		log.Printf("with prefix: %s", prefix)
+	}
 
 	s.handleVuego(prefix)
 

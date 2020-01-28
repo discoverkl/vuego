@@ -182,17 +182,16 @@ interface Option {
       ws.onmessage = this.onmessage.bind(this);
 
       ws.onopen = e => {
-        // ws.send(JSON.stringify({ method: "1" }));
         (window as any).document.body.style.opacity = 1;
       };
 
       ws.onerror = e => {
-        console.log("ws error:", e);
+        console.log("ws error at", new Date().toLocaleString(), e);
       };
 
       ws.onclose = e => {
         (window as any).document.body.style.opacity = 0.382;
-        console.log("ws close:", e);
+        console.log("ws close at", new Date().toLocaleString(), e);
       };
     }
 
