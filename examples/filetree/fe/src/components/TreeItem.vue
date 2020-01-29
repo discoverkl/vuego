@@ -18,6 +18,7 @@
 <script lang="ts">
 import Vue from "vue";
 import { ref, reactive, toRefs, computed } from "@vue/composition-api";
+import { getapi } from "vue2go";
 
 interface Folder {
   name: string;
@@ -26,11 +27,15 @@ interface Folder {
 }
 
 // openFolder is implemented in Go
-declare function openFolder(path: string): Folder;
+interface API {
+  openFolder(path: string): Folder;
+}
 
 interface Props {
   item: Folder;
 }
+
+const api = getapi() as API;
 
 export default {
   name: "tree-item",
@@ -53,11 +58,11 @@ export default {
       if (state.isFolder) {
         if (!state.isOpen) {
           try {
-            state.version++
+            state.version++;
             Vue.set(
               props.item,
               "children",
-              (await openFolder(props.item.name)).children
+              (await api.openFolder(props.item.name)).children
             );
           } catch (ex) {
             Vue.set(props.item, "children", null);

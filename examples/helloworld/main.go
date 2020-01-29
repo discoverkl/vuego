@@ -2,7 +2,12 @@
 package main
 
 import (
+	"bufio"
+	"errors"
+	"fmt"
+	"io"
 	"log"
+	"os"
 
 	"github.com/discoverkl/vuego"
 	"github.com/discoverkl/vuego/browser"
@@ -10,30 +15,61 @@ import (
 	"github.com/markbates/pkger"
 )
 
+const promptText = `
+*** Commands ***
+
+1: WebServer - run a normal web server
+2: LocalPage - run a local web server in background and open its' serving url with your default web browser
+3: NativeApp - run a local web server in background and open its' serving url within a native app (which is a chrome process)
+
+Please enter (1-3)? `
+
 func add(a, b int) int {
 	return a + b
 }
 
 func main() {
-	runWebServer()
-	// runLocalPage()
-	// runNativeApp()
+	for {
+		fmt.Print(promptText)
+		ch, _, err := bufio.NewReader(os.Stdin).ReadRune()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				fmt.Println()
+				os.Exit(0)
+			}
+			log.Fatal(err)
+		}
+
+		switch ch {
+		case '1':
+			runWebServer()
+		case '2':
+			runLocalPage()
+		case '3':
+			runNativeApp()
+		case 'q':
+		default:
+			continue
+		}
+		return
+	}
 }
 
-// run a normal web server
+// site root (http.FileSystem)
+const www = pkger.Dir("/examples/helloworld/fe/dist")
+
 func runWebServer() {
 	vuego.Bind("add", add)
 
 	addr := ":8000"
 	log.Printf("listen on: %s", addr)
-	if err := vuego.ListenAndServe(addr, pkger.Dir("/examples/helloworld/fe/dist")); err != nil {
+	if err := vuego.ListenAndServe(addr, www); err != nil {
 		log.Fatal(err)
 	}
 }
 
-// run a local web server in background and open its' serving url with your default web browser
 func runLocalPage() {
-	win, err := browser.NewPage(pkger.Dir("/examples/helloworld/fe/dist"))
+	win, err := browser.NewPage(www)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -41,9 +77,8 @@ func runLocalPage() {
 	<-win.Done()
 }
 
-// run a local web server in background and open its' serving url within a native app (which is a chrome process)
 func runNativeApp() {
-	win, err := chrome.NewApp(pkger.Dir("/examples/helloworld/fe/dist"), 200, 200, 800, 600)
+	win, err := chrome.NewApp(pkger.Dir(www), 200, 200, 800, 600)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -7081,6 +7081,11 @@ vue-template-es2015-compiler@^1.9.0:
   resolved "https://registry.npm.taobao.org/vue-template-es2015-compiler/download/vue-template-es2015-compiler-1.9.1.tgz#1ee3bc9a16ecbf5118be334bb15f9c46f82f5825"
   integrity sha1-HuO8mhbsv1EYvjNLsV+cRvgvWCU=
 
+vue2go@^1.0.5:
+  version "1.0.5"
+  resolved "https://registry.npm.taobao.org/vue2go/download/vue2go-1.0.5.tgz?cache=0&sync_timestamp=1580308444714&other_urls=https%3A%2F%2Fregistry.npm.taobao.org%2Fvue2go%2Fdownload%2Fvue2go-1.0.5.tgz#6c760a190067bbc8e019804bcb8c779eeaf4f3d4"
+  integrity sha1-bHYKGQBnu8jgGYBLy4x3nur089Q=
+
 vue@^2.6.10:
   version "2.6.11"
   resolved "https://registry.npm.taobao.org/vue/download/vue-2.6.11.tgz#76594d877d4b12234406e84e35275c6d514125c5"

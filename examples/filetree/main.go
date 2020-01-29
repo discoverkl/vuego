@@ -2,22 +2,25 @@
 package main
 
 import (
-	"log"
-	"sort"
-	"os"
-	"strings"
-	"path/filepath"
+	"flag"
+	"fmt"
 	"io/ioutil"
+	"log"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+
 	"github.com/discoverkl/vuego"
-	"github.com/discoverkl/vuego/chrome"
 	"github.com/discoverkl/vuego/browser"
+	"github.com/discoverkl/vuego/chrome"
 	"github.com/markbates/pkger"
 )
 
 type Folder struct {
-	Name string `json:"name"`
+	Name     string    `json:"name"`
 	Children []*Folder `json:"children"`
-	IsFolder bool `json:"isFolder"`
+	IsFolder bool      `json:"isFolder"`
 }
 
 func openFolder(path string) (*Folder, error) {
@@ -31,10 +34,10 @@ func openFolder(path string) (*Folder, error) {
 	files, err := ioutil.ReadDir(path)
 	if err != nil {
 		return nil, err
-	}	
+	}
 
 	ret := &Folder{
-		Name: path,
+		Name:     path,
 		Children: []*Folder{},
 		IsFolder: true,
 	}
@@ -59,7 +62,7 @@ func openFolder(path string) (*Folder, error) {
 }
 
 func isFolder(f os.FileInfo, path string) bool {
-	if f.Mode() & os.ModeSymlink != 0 {
+	if f.Mode()&os.ModeSymlink != 0 {
 		target, err := filepath.EvalSymlinks(path)
 		if err != nil {
 			return false
@@ -79,11 +82,18 @@ func main() {
 	// runNativeApp()
 }
 
+var port int
+
+func init() {
+	flag.IntVar(&port, "p", 80, "binding port")
+	flag.Parse()
+}
+
 // run a normal web server
 func runWebServer() {
 	vuego.Bind("openFolder", openFolder)
 
-	addr := ":8000"
+	addr := fmt.Sprintf(":%d", port)
 	log.Printf("listen on: %s", addr)
 	if err := vuego.ListenAndServe(addr, pkger.Dir("/examples/filetree/fe/dist")); err != nil {
 		log.Fatal(err)

@@ -1,7 +1,10 @@
 package main
+
 //go:generate go run github.com/markbates/pkger/cmd/pkger -o examples/prime
 import (
 	"context"
+	"flag"
+	"fmt"
 	"log"
 	"sync"
 
@@ -9,13 +12,20 @@ import (
 	"github.com/markbates/pkger"
 )
 
+var port int
+
 var cancelActiveJob context.CancelFunc
 var jobLock sync.Mutex
+
+func init() {
+	flag.IntVar(&port, "p", 80, "binding port")
+	flag.Parse()
+}
 
 func main() {
 	vuego.Bind("js2go", js2go)
 
-	addr := ":8000"
+	addr := fmt.Sprintf(":%d", port)
 	log.Printf("listen on: %s", addr)
 	if err := vuego.ListenAndServe(addr, pkger.Dir("/examples/prime/fe/dist")); err != nil {
 		log.Fatal(err)

@@ -25,27 +25,29 @@
 			</div>
     </div>
     
-    <script type="text/javascript" src="/vuego.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vue2go@1.0.5/vue2go.js"></script>
 
 		<!-- Connect UI actions to Go functions -->
 		<script>
       async function main() {
+        const api = await Vuego.getapi({async: true})
+        
         const counter = document.querySelector('.counter');
         const btnIncr = document.querySelector('.btn-incr');
         const btnDecr = document.querySelector('.btn-decr');
 
         // We use async/await because Go functions are asynchronous
         const render = async () => {
-          counter.innerText = `Count: ${await window.counterValue()}`;
+          counter.innerText = `Count: ${await api.counterValue()}`;
         };
 
         btnIncr.addEventListener('click', async () => {
-          await counterAdd(1); // Call Go function
+          await api.counterAdd(1); // Call Go function
           render();
         });
 
         btnDecr.addEventListener('click', async () => {
-          await counterAdd(-1); // Call Go function
+          await api.counterAdd(-1); // Call Go function
           render();
         });
 
