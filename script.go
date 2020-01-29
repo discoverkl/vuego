@@ -335,7 +335,8 @@ var script = `var __awaiter = (this && this.__awaiter) || function (thisArg, _ar
         };
         vuego.beforeReady = exportAPI;
         exportAPI();
+        return api;
     }
-    main();
+    return main();
 })();
 `

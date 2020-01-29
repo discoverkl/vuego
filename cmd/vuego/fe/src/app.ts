@@ -326,6 +326,7 @@ interface Option {
     };
     vuego.beforeReady = exportAPI;
     exportAPI();
+    return api;
   }
-  main();
+  return main();
 })();

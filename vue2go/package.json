@@ -1,0 +1,11 @@
+{
+  "name": "vue2go",
+  "version": "1.0.5",
+  "description": "Call remote go methods directly from javascript through WebSocket.",
+  "main": "vue2go.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "leokong",
+  "license": "ISC"
+}
