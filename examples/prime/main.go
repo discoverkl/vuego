@@ -1,6 +1,6 @@
 package main
 
-//go:generate go run github.com/markbates/pkger/cmd/pkger -o examples/prime
+//go:generate go run github.com/markbates/pkger/cmd/pkger -o prime
 import (
 	"context"
 	"flag"
@@ -27,7 +27,7 @@ func main() {
 
 	addr := fmt.Sprintf(":%d", port)
 	log.Printf("listen on: %s", addr)
-	if err := vuego.ListenAndServe(addr, pkger.Dir("/examples/prime/fe/dist")); err != nil {
+	if err := vuego.ListenAndServe(addr, pkger.Dir("/prime/fe/dist")); err != nil {
 		log.Fatal(err)
 	}
 }

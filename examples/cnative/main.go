@@ -1,4 +1,4 @@
-//go:generate go run github.com/markbates/pkger/cmd/pkger -o examples/cnative
+//go:generate go run github.com/markbates/pkger/cmd/pkger -o cnative
 package main
 
 import (
@@ -16,8 +16,8 @@ func add(a, b int) int {
 }
 
 func main() {
-	win, err := chrome.NewApp(pkger.Dir("/examples/helloworld/fe/dist"), 200, 200, 800, 600)
-	// win, err := browser.NewPage(pkger.Dir("/examples/helloworld/fe/dist"))
+	win, err := chrome.NewApp(pkger.Dir("/helloworld/fe/dist"), 200, 200, 800, 600)
+	// win, err := browser.NewPage(pkger.Dir("/helloworld/fe/dist"))
 	if err != nil {
 		log.Fatal(err)
 	}

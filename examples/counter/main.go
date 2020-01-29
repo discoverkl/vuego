@@ -1,4 +1,4 @@
-//go:generate go run github.com/markbates/pkger/cmd/pkger -o examples/counter
+//go:generate go run github.com/markbates/pkger/cmd/pkger -o counter
 package main
 
 import (
@@ -33,7 +33,7 @@ func main() {
 
 	addr := ":8000"
 	log.Printf("listen on: %s", addr)
-	if err := vuego.ListenAndServe(addr, pkger.Dir("/examples/counter/fe/dist")); err != nil {
+	if err := vuego.ListenAndServe(addr, pkger.Dir("/counter/fe/dist")); err != nil {
 		log.Fatal(err)
 	}
 }

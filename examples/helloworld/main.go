@@ -1,4 +1,4 @@
-//go:generate go run github.com/markbates/pkger/cmd/pkger -o examples/helloworld
+//go:generate go run github.com/markbates/pkger/cmd/pkger -o helloworld
 package main
 
 import (
@@ -56,7 +56,7 @@ func main() {
 }
 
 // site root (http.FileSystem)
-const www = pkger.Dir("/examples/helloworld/fe/dist")
+const www = pkger.Dir("/helloworld/fe/dist")
 
 func runWebServer() {
 	vuego.Bind("add", add)

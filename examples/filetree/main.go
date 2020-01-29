@@ -1,4 +1,4 @@
-//go:generate go run github.com/markbates/pkger/cmd/pkger -o examples/filetree
+//go:generate go run github.com/markbates/pkger/cmd/pkger -o filetree
 package main
 
 import (
@@ -95,14 +95,14 @@ func runWebServer() {
 
 	addr := fmt.Sprintf(":%d", port)
 	log.Printf("listen on: %s", addr)
-	if err := vuego.ListenAndServe(addr, pkger.Dir("/examples/filetree/fe/dist")); err != nil {
+	if err := vuego.ListenAndServe(addr, pkger.Dir("/filetree/fe/dist")); err != nil {
 		log.Fatal(err)
 	}
 }
 
 // run a local web server in background and open its' serving url with your default web browser
 func runLocalPage() {
-	win, err := browser.NewPage(pkger.Dir("/examples/filetree/fe/dist"))
+	win, err := browser.NewPage(pkger.Dir("/filetree/fe/dist"))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func runLocalPage() {
 
 // run a local web server in background and open its' serving url within a native app (which is a chrome process)
 func runNativeApp() {
-	win, err := chrome.NewApp(pkger.Dir("/examples/filetree/fe/dist"), 0, 0, 1024, 768)
+	win, err := chrome.NewApp(pkger.Dir("/filetree/fe/dist"), 0, 0, 1024, 768)
 	if err != nil {
 		log.Fatal(err)
 	}
