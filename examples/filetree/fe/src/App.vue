@@ -17,7 +17,7 @@ import {
   computed,
   onMounted
 } from "@vue/composition-api";
-import TreeItem from "./components/TreeItem";
+import TreeItem from "./components/TreeItem.vue";
 
 export default {
   components: {

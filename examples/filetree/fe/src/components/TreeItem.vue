@@ -31,10 +31,6 @@ interface API {
   openFolder(path: string): Folder;
 }
 
-interface Props {
-  item: Folder;
-}
-
 const api = getapi() as API;
 
 export default {
@@ -42,7 +38,7 @@ export default {
   props: {
     item: Object
   },
-  setup(props: Props) {
+  setup(props) {
     const state = reactive({
       isOpen: false,
       isFolder: computed(() => props.item.isFolder),
@@ -66,7 +62,7 @@ export default {
             );
           } catch (ex) {
             Vue.set(props.item, "children", null);
-            console.log("openFolder failed:", ex);
+            console.error("openFolder failed:", ex);
           }
         }
 
