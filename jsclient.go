@@ -99,13 +99,6 @@ func (p *jsClient) readLoop(ctx context.Context) {
 		}
 
 		switch m.Method {
-		case "1":
-			go func() {
-				_, err := p.send("Vuego.call", h{"name": "eval", "args": []string{"1+2"}}, true)
-				if err != nil {
-					log.Println("send message:", err)
-				}
-			}()
 		case "Vuego.ret":
 			ret := retParams{}
 			err := json.Unmarshal([]byte(m.Params), &ret)
@@ -216,17 +209,24 @@ func (p *jsClient) eval(expr string) (json.RawMessage, error) {
 	return p.send("Vuego.call", h{"name": "eval", "args": []string{expr}}, true)
 }
 
-func (p *jsClient) bind(name string, f bindingFunc) error {
+// func (p *jsClient) bind(name string, f bindingFunc) error {
+func (p *jsClient) bind(items map[string]bindingFunc) error {
+	added := []string{}
 	p.Lock()
-	_, exists := p.binding[name]
-	p.binding[name] = f
+	for name, f := range items {
+		_, exists := p.binding[name]
+		p.binding[name] = f
+		if !exists {
+			added = append(added, name)
+		}
+	}
 	p.Unlock()
 
-	if exists {
+	if len(added) == 0 {
 		return nil
 	}
 
-	if _, err := p.send("Vuego.bind", h{"name": name}, false); err != nil {
+	if _, err := p.send("Vuego.bind", h{"name": added}, false); err != nil {
 		return err
 	}
 	return nil

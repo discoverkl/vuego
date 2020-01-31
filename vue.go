@@ -6,9 +6,11 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/discoverkl/vuego/one"
 	"golang.org/x/net/websocket"
@@ -18,12 +20,32 @@ var dev = one.InDevMode("vuego")
 
 // ReadyFuncName is an async ready function in api object.
 const ReadyFuncName = "Vuego"
+const ContextBindingName = "context"
+
+type ObjectFactory func() interface{}
 
 var Prefix string
 
-// Bind a api for javascript.
+// Bind one api for javascript.
 func Bind(name string, f interface{}) {
 	err := DefaultServer.Bind(name, f)
+	if err != nil {
+		panic(err)
+	}
+}
+
+// BindObject bind all public members for javascript.
+// If name is empty, bind directly to the api object.
+func BindObject(name string, i interface{}) {
+	err := DefaultServer.BindObject(name, i)
+	if err != nil {
+		panic(err)
+	}
+}
+
+// BindObjectFactory call BindObject for every client session.
+func BindObjectFactory(name string, factory ObjectFactory) {
+	err := DefaultServer.BindObjectFactory(name, factory)
 	if err != nil {
 		panic(err)
 	}
@@ -60,6 +82,7 @@ type FileServer struct {
 	serveMux *http.ServeMux
 
 	binding map[string]interface{}
+	bindingFactory map[string]ObjectFactory
 
 	// local server done
 	wg              sync.WaitGroup
@@ -76,6 +99,7 @@ func NewFileServer(root http.FileSystem) *FileServer {
 		serveMux:        serveMux,
 		server:          &http.Server{Handler: serveMux},
 		binding:         map[string]interface{}{},
+		bindingFactory: map[string]ObjectFactory{},
 		started:         make(chan struct{}),
 		localServerDone: make(chan struct{}),
 	}
@@ -154,8 +178,8 @@ func (s *FileServer) handleVuego(prefix string) {
 		}
 
 		clientScript := injectOptions(&jsOption{
-			Prefix: prefix,
-			Search: jsQuery,
+			Prefix:   prefix,
+			Search:   jsQuery,
 			Bindings: names,
 		})
 		// clientScript = mapScript(clientScript, `"/vuego"`, fmt.Sprintf(`"%s"`, prefix + serverPath))
@@ -176,6 +200,85 @@ func (s *FileServer) Bind(name string, f interface{}) error {
 	return nil
 }
 
+func (s *FileServer) BindObjectFactory(name string, factory func() interface{}) error {
+	if factory == nil {
+		return fmt.Errorf("argument factory is required")
+	}
+	s.bindingFactory[name] = factory
+	return nil
+}
+
+type member struct {
+	Name  string
+	Value reflect.Value
+}
+
+func (s *FileServer) BindObject(name string, i interface{}) error {
+	binds, err := s.getBindings(name, i)
+	if err != nil {
+		return err
+	}
+	for name, f := range binds {
+		_ = s.Bind(name, f)
+	}
+	return nil
+}
+
+func (s *FileServer) getBindings(name string, i interface{}) (map[string]interface{}, error) {
+	if i == nil {
+		return nil, fmt.Errorf("getBindings on nil")
+	}
+	ret := map[string]interface{}{}
+	raw := reflect.ValueOf(i)
+	v := raw
+	for v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+
+	switch v.Kind() {
+	case reflect.Struct:
+		members := []member{}
+		for i := 0; i < v.Type().NumField(); i++ {
+			members = append(members, member{
+				Name:  v.Type().Field(i).Name,
+				Value: v.Field(i),
+			})
+		}
+
+		for i := 0; i < raw.Type().NumMethod(); i++ {
+			members = append(members, member{
+				Name:  raw.Type().Method(i).Name,
+				Value: raw.Method(i),
+			})
+		}
+
+		for _, f := range members {
+			if !unicode.IsUpper(rune(f.Name[0])) {
+				continue
+			}
+			// convert to js binding name
+			fname := fmt.Sprintf("%s%s", strings.ToLower(f.Name[0:1]), f.Name[1:])
+			if name != "" {
+				fname = fmt.Sprintf("%s.%s", name, fname)
+			}
+
+			// wrap none-Func fields and bind methods
+			fv := f.Value
+			var bindingFunc interface{}
+			switch fv.Kind() {
+			case reflect.Func:
+				bindingFunc = fv.Interface()
+			default:
+				bindingFunc = func() interface{} { return fv.Interface() }
+			}
+			ret[fname] = bindingFunc
+		}
+	default:
+		return nil, fmt.Errorf("unsupport object kind: %v", v.Kind())
+	}
+	return ret, nil
+}
+
 // ready(0) -> started(1+) -> done(0)
 func (s *FileServer) serveClientConn(ws *websocket.Conn) {
 	s.wg.Add(1)
@@ -193,13 +296,28 @@ func (s *FileServer) serveClientConn(ws *websocket.Conn) {
 		log.Printf("attach websocket failed: %v", err)
 	}
 
-	// bind api
-	for name, f := range s.binding {
-		err := p.Bind(name, f)
+	// bind global api
+	err = p.BindMap(s.binding)
+	if err != nil {
+		log.Printf("bind api failed: %v", err)
+	}
+
+	// bind session api
+	binds := map[string]interface{}{}
+	for objName, factory := range s.bindingFactory {
+		objBinds, err := s.getBindings(objName, factory())
 		if err != nil {
-			log.Printf("bind api %s failed: %v", name, err)
+			log.Printf("get session bindings failed: %v", err)
+			continue
+		}
+		for name, f := range objBinds {
+			binds[name] = f
 		}
 	}
+	err = p.BindMap(binds)
+	if err != nil {
+		log.Printf("bind session api failed: %v", err)
+	}	
 
 	// server ready
 	err = p.SetReady()

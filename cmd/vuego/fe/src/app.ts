@@ -86,9 +86,7 @@ interface Option {
     }
 
     extendVuego(Vuego: any) {
-      Vuego.self = () => {
-        return this;
-      };
+      Vuego.self = this;
     }
 
     getapi(): any {
@@ -162,7 +160,9 @@ interface Option {
         }
         case "Vuego.bind": {
           params = msg.params;
-          this.bind(params.name);
+          if (Array.isArray(params.name))
+            for (const name of params.name) this.bind(name);
+          else this.bind(params.name);
           break;
         }
         case "Vuego.ready": {
@@ -258,6 +258,18 @@ interface Option {
         this.ws.send(JSON.stringify(callMsg));
         return promise;
       };
+
+      // copy root["a.b"] to root.a.b
+      if (bindingName.indexOf(".") !== -1) {
+        const sp = bindingName.split(".");
+        const [parts, name] = [sp.slice(0, sp.length - 1), sp[sp.length - 1]];
+        let target = root;
+        for (const part of parts) {
+          target[part] = target[part] || {};
+          target = target[part];
+        }
+        target[name] = root[bindingName];
+      }
     }
 
     initContext() {

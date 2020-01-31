@@ -1,8 +1,9 @@
 package main
 
 import (
-	"log"
 	"context"
+	"log"
+	"math"
 	"net/http"
 	"time"
 
@@ -28,12 +29,28 @@ func timer(ctx context.Context, write *vuego.Function) string {
 	return "done"
 }
 
+type Counter struct {
+	sum int
+}
+
+func newCounter() *Counter {
+	return &Counter{}
+}
+
+func (c *Counter) Add() int {
+	c.sum++
+	return c.sum
+}
+
 func main() {
 	vuego.Bind("sum", sum)
 	vuego.Bind("timer", timer)
+	vuego.Bind("math.pow", math.Pow)
+	vuego.Bind("math.abs", math.Abs)
+
+	vuego.BindObject("", newCounter())
 
 	if err := vuego.ListenAndServe(":8000", http.Dir("./fe/dist")); err != nil {
 		log.Fatal(err)
 	}
-
 }
