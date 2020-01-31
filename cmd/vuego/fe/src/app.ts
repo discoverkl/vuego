@@ -39,7 +39,7 @@ interface Option {
       dev: true,
       readyFuncName: "Vuego",
       prefix: "",
-      search: "",
+      search: "?name=api",
       bindings: []
     };
   }

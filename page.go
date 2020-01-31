@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strings"
+	"unicode"
 
 	"golang.org/x/net/websocket"
 )
@@ -35,11 +37,16 @@ func newPage(ws *websocket.Conn) (*page, error) {
 	return p, nil
 }
 
+// Bind a Func, map[string]Func or an object
 func (c *page) Bind(name string, f interface{}) error {
-	return c.BindMap(map[string]interface{}{name: f})
+	binds, err := getBindings(name, f)
+	if err != nil {
+		return err
+	}
+	return c.bindMap(binds)
 }
 
-func (c *page) BindMap(items map[string]interface{}) error {
+func (c *page) bindMap(items map[string]interface{}) error {
 	for name, f := range items {
 		if err := checkBindFunc(name, f); err != nil {
 			return err
@@ -75,6 +82,10 @@ func (c *page) BindMap(items map[string]interface{}) error {
 
 				if isContext {
 					ctx := arg.Elem().Interface().(*Context)
+					if ctx == nil {
+						ctx = &Context{}
+						arg.Elem().Set(reflect.ValueOf(ctx))
+					}
 					cancel := ctx.WithCancel()
 					defer cancel()
 					c.jsc.ref(ctx.Seq, cancel)
@@ -145,17 +156,88 @@ func checkBindFunc(name string, f interface{}) error {
 	switch name {
 	case "":
 		return fmt.Errorf("name is required for function binding")
-    case ReadyFuncName:
+	case ReadyFuncName:
 		return fmt.Errorf("binding name '%s' is reserved for internal use", name)
 	case ContextBindingName:
 		return fmt.Errorf("binding name '%s' is reserved for javascript context package", name)
 	}
+
 	v := reflect.ValueOf(f)
 	if v.Kind() != reflect.Func {
-		return fmt.Errorf("f should be a function")
+		return fmt.Errorf("%s: should be a function", name)
 	}
 	if n := v.Type().NumOut(); n > 2 {
-		return fmt.Errorf("too many return values")
+		return fmt.Errorf("%s: too many return values", name)
 	}
 	return nil
+}
+
+func getBindings(name string, i interface{}) (map[string]interface{}, error) {
+	if i == nil {
+		return nil, fmt.Errorf("getBindings on nil")
+	}
+	ret := map[string]interface{}{}
+	raw := reflect.ValueOf(i)
+	v := raw
+	for v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+
+	switch v.Kind() {
+	case reflect.Func:
+		ret[name] = v.Interface()
+		return ret, nil
+	case reflect.Map:
+		vmap, ok := v.Interface().(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("binding target map is not type of map[string]interface{}")
+		}
+		if name == "" {
+			return vmap, nil
+		}
+		for subName, target := range vmap {
+			ret[fmt.Sprintf("%s.%s", name, subName)] = target
+		}
+		return ret, nil
+	case reflect.Struct:
+		members := []member{}
+		for i := 0; i < v.Type().NumField(); i++ {
+			members = append(members, member{
+				Name:  v.Type().Field(i).Name,
+				Value: v.Field(i),
+			})
+		}
+
+		for i := 0; i < raw.Type().NumMethod(); i++ {
+			members = append(members, member{
+				Name:  raw.Type().Method(i).Name,
+				Value: raw.Method(i),
+			})
+		}
+
+		for _, f := range members {
+			if !unicode.IsUpper(rune(f.Name[0])) {
+				continue
+			}
+			// convert to js binding name
+			fname := fmt.Sprintf("%s%s", strings.ToLower(f.Name[0:1]), f.Name[1:])
+			if name != "" {
+				fname = fmt.Sprintf("%s.%s", name, fname)
+			}
+
+			// wrap none-Func fields and bind methods
+			fv := f.Value
+			var bindingFunc interface{}
+			switch fv.Kind() {
+			case reflect.Func:
+				bindingFunc = fv.Interface()
+			default:
+				bindingFunc = func() interface{} { return fv.Interface() }
+			}
+			ret[fname] = bindingFunc
+		}
+	default:
+		return nil, fmt.Errorf("unsupport object kind: %v", v.Kind())
+	}
+	return ret, nil
 }

@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"log"
-	"math"
 	"net/http"
 	"time"
 
@@ -20,9 +19,9 @@ func timer(ctx context.Context, write *vuego.Function) string {
 		case <-ctx.Done():
 			return "cancel"
 		case <-time.After(time.Millisecond * 100):
-			err := write.Call(i)
-			if err != nil {
-				log.Printf("timer callback call error: %v", err)
+			v := write.Call(i)
+			if v.Err() != nil {
+				log.Printf("timer callback call error: %v", v.Err())
 			}
 		}
 	}
@@ -45,10 +44,11 @@ func (c *Counter) Add() int {
 func main() {
 	vuego.Bind("sum", sum)
 	vuego.Bind("timer", timer)
-	vuego.Bind("math.pow", math.Pow)
-	vuego.Bind("math.abs", math.Abs)
 
-	vuego.BindObject("", newCounter())
+	// vuego.Bind("math.pow", math.Pow)
+	// vuego.Bind("math.abs", math.Abs)
+	// vuego.Bind("utils.time", map[string]interface{}{"timer": timer})
+	// vuego.BindFactory("counter", func() interface{} { return timer })
 
 	if err := vuego.ListenAndServe(":8000", http.Dir("./fe/dist")); err != nil {
 		log.Fatal(err)

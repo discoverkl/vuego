@@ -209,7 +209,6 @@ func (p *jsClient) eval(expr string) (json.RawMessage, error) {
 	return p.send("Vuego.call", h{"name": "eval", "args": []string{expr}}, true)
 }
 
-// func (p *jsClient) bind(name string, f bindingFunc) error {
 func (p *jsClient) bind(items map[string]bindingFunc) error {
 	added := []string{}
 	p.Lock()

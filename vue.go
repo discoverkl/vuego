@@ -10,7 +10,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"unicode"
 
 	"github.com/discoverkl/vuego/one"
 	"golang.org/x/net/websocket"
@@ -34,17 +33,17 @@ func Bind(name string, f interface{}) {
 	}
 }
 
-// BindObject bind all public members for javascript.
-// If name is empty, bind directly to the api object.
-func BindObject(name string, i interface{}) {
-	err := DefaultServer.BindObject(name, i)
-	if err != nil {
-		panic(err)
-	}
-}
+// // BindObject bind all public members for javascript.
+// // If name is empty, bind directly to the api object.
+// func BindObject(name string, i interface{}) {
+// 	err := DefaultServer.BindObject(name, i)
+// 	if err != nil {
+// 		panic(err)
+// 	}
+// }
 
-// BindObjectFactory call BindObject for every client session.
-func BindObjectFactory(name string, factory ObjectFactory) {
+// BindFactory call factory and bind its' return value for each client session.
+func BindFactory(name string, factory ObjectFactory) {
 	err := DefaultServer.BindObjectFactory(name, factory)
 	if err != nil {
 		panic(err)
@@ -81,7 +80,7 @@ type FileServer struct {
 	server   *http.Server
 	serveMux *http.ServeMux
 
-	binding map[string]interface{}
+	binding        map[string]interface{}
 	bindingFactory map[string]ObjectFactory
 
 	// local server done
@@ -99,7 +98,7 @@ func NewFileServer(root http.FileSystem) *FileServer {
 		serveMux:        serveMux,
 		server:          &http.Server{Handler: serveMux},
 		binding:         map[string]interface{}{},
-		bindingFactory: map[string]ObjectFactory{},
+		bindingFactory:  map[string]ObjectFactory{},
 		started:         make(chan struct{}),
 		localServerDone: make(chan struct{}),
 	}
@@ -193,8 +192,15 @@ func (s *FileServer) Done() <-chan struct{} {
 }
 
 func (s *FileServer) Bind(name string, f interface{}) error {
-	if err := checkBindFunc(name, f); err != nil {
-		return err
+	// preflight check
+	hold, err := getBindings(name, f)
+	if err != nil {
+		return fmt.Errorf("invalid binding: %w", err)
+	}
+	for subName, target := range hold {
+		if err = checkBindFunc(subName, target); err != nil {
+			return fmt.Errorf("invalid binding: %w", err)
+		}
 	}
 	s.binding[name] = f
 	return nil
@@ -213,71 +219,16 @@ type member struct {
 	Value reflect.Value
 }
 
-func (s *FileServer) BindObject(name string, i interface{}) error {
-	binds, err := s.getBindings(name, i)
-	if err != nil {
-		return err
-	}
-	for name, f := range binds {
-		_ = s.Bind(name, f)
-	}
-	return nil
-}
-
-func (s *FileServer) getBindings(name string, i interface{}) (map[string]interface{}, error) {
-	if i == nil {
-		return nil, fmt.Errorf("getBindings on nil")
-	}
-	ret := map[string]interface{}{}
-	raw := reflect.ValueOf(i)
-	v := raw
-	for v.Kind() == reflect.Ptr {
-		v = v.Elem()
-	}
-
-	switch v.Kind() {
-	case reflect.Struct:
-		members := []member{}
-		for i := 0; i < v.Type().NumField(); i++ {
-			members = append(members, member{
-				Name:  v.Type().Field(i).Name,
-				Value: v.Field(i),
-			})
-		}
-
-		for i := 0; i < raw.Type().NumMethod(); i++ {
-			members = append(members, member{
-				Name:  raw.Type().Method(i).Name,
-				Value: raw.Method(i),
-			})
-		}
-
-		for _, f := range members {
-			if !unicode.IsUpper(rune(f.Name[0])) {
-				continue
-			}
-			// convert to js binding name
-			fname := fmt.Sprintf("%s%s", strings.ToLower(f.Name[0:1]), f.Name[1:])
-			if name != "" {
-				fname = fmt.Sprintf("%s.%s", name, fname)
-			}
-
-			// wrap none-Func fields and bind methods
-			fv := f.Value
-			var bindingFunc interface{}
-			switch fv.Kind() {
-			case reflect.Func:
-				bindingFunc = fv.Interface()
-			default:
-				bindingFunc = func() interface{} { return fv.Interface() }
-			}
-			ret[fname] = bindingFunc
-		}
-	default:
-		return nil, fmt.Errorf("unsupport object kind: %v", v.Kind())
-	}
-	return ret, nil
-}
+// func (s *FileServer) BindObject(name string, i interface{}) error {
+// 	binds, err := s.getBindings(name, i)
+// 	if err != nil {
+// 		return err
+// 	}
+// 	for name, f := range binds {
+// 		_ = s.Bind(name, f)
+// 	}
+// 	return nil
+// }
 
 // ready(0) -> started(1+) -> done(0)
 func (s *FileServer) serveClientConn(ws *websocket.Conn) {
@@ -296,28 +247,30 @@ func (s *FileServer) serveClientConn(ws *websocket.Conn) {
 		log.Printf("attach websocket failed: %v", err)
 	}
 
-	// bind global api
-	err = p.BindMap(s.binding)
-	if err != nil {
-		log.Printf("bind api failed: %v", err)
-	}
-
-	// bind session api
+	// apply binding
 	binds := map[string]interface{}{}
-	for objName, factory := range s.bindingFactory {
-		objBinds, err := s.getBindings(objName, factory())
+	collect := func(objName string, target interface{}) {
+		objBinds, err := getBindings(objName, target)
 		if err != nil {
 			log.Printf("get session bindings failed: %v", err)
-			continue
+			return
 		}
 		for name, f := range objBinds {
 			binds[name] = f
 		}
 	}
-	err = p.BindMap(binds)
+
+	for name, target := range s.binding {
+		collect(name, target)
+	}
+	for name, factory := range s.bindingFactory {
+		collect(name, factory())
+	}
+
+	err = p.bindMap(binds)
 	if err != nil {
-		log.Printf("bind session api failed: %v", err)
-	}	
+		log.Printf("binding failed: %v", err)
+	}
 
 	// server ready
 	err = p.SetReady()
