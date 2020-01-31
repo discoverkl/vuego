@@ -1,5 +1,5 @@
 /*!
- * vue2go.js v1.0.5
+ * vue2go.js v1.0.6
  * (c) 2019-2020 Leo Kong
  * Released under the MIT License.
  */
