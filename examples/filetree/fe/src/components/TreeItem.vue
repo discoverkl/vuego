@@ -18,7 +18,7 @@
 <script lang="ts">
 import Vue from "vue";
 import { ref, reactive, toRefs, computed } from "@vue/composition-api";
-import { getapi } from "vue2go";
+import { getapi, Base } from "vue2go";
 
 interface Folder {
   name: string;
@@ -27,7 +27,7 @@ interface Folder {
 }
 
 // openFolder is implemented in Go
-interface API {
+interface API extends Base {
   openFolder(path: string): Folder;
 }
 
