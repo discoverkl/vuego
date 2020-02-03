@@ -98,6 +98,7 @@ var script = `var __awaiter = (this && this.__awaiter) || function (thisArg, _ar
                     });
                 };
                 root[name] = placeholder;
+                this.copyBind(name, root);
             }
             this.extendVuego(root[options.readyFuncName]);
             this.root = root;
@@ -273,6 +274,9 @@ var script = `var __awaiter = (this && this.__awaiter) || function (thisArg, _ar
                 this.ws.send(JSON.stringify(callMsg));
                 return promise;
             });
+            this.copyBind(bindingName, root);
+        }
+        copyBind(bindingName, root) {
             // copy root["a.b"] to root.a.b
             if (bindingName.indexOf(".") !== -1) {
                 const sp = bindingName.split(".");

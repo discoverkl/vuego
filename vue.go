@@ -82,6 +82,7 @@ type FileServer struct {
 
 	binding        map[string]interface{}
 	bindingFactory map[string]ObjectFactory
+	bindingNames map[string]bool	// for js placeholder
 
 	// local server done
 	wg              sync.WaitGroup
@@ -99,6 +100,7 @@ func NewFileServer(root http.FileSystem) *FileServer {
 		server:          &http.Server{Handler: serveMux},
 		binding:         map[string]interface{}{},
 		bindingFactory:  map[string]ObjectFactory{},
+		bindingNames: map[string]bool{},
 		started:         make(chan struct{}),
 		localServerDone: make(chan struct{}),
 	}
@@ -172,7 +174,7 @@ func (s *FileServer) handleVuego(prefix string) {
 		// bytes, _ := json.Marshal(jsQuery)
 
 		names := []string{}
-		for name, _ := range s.binding {
+		for name, _ := range s.bindingNames {
 			names = append(names, name)
 		}
 
@@ -192,6 +194,14 @@ func (s *FileServer) Done() <-chan struct{} {
 }
 
 func (s *FileServer) Bind(name string, f interface{}) error {
+	if err := s.collectBindObject(name, f); err != nil {
+		return err
+	}
+	s.binding[name] = f
+	return nil
+}
+
+func (s *FileServer) collectBindObject(name string, f interface{}) error {
 	// preflight check
 	hold, err := getBindings(name, f)
 	if err != nil {
@@ -201,14 +211,21 @@ func (s *FileServer) Bind(name string, f interface{}) error {
 		if err = checkBindFunc(subName, target); err != nil {
 			return fmt.Errorf("invalid binding: %w", err)
 		}
+		s.bindingNames[subName] = true
 	}
-	s.binding[name] = f
 	return nil
 }
 
 func (s *FileServer) BindObjectFactory(name string, factory ObjectFactory) error {
 	if factory == nil {
 		return fmt.Errorf("argument factory is required")
+	}
+	// preflight check
+	done := make(chan bool)
+	defer close(done)
+	f := factory(done)
+	if err := s.collectBindObject(name, f); err != nil {
+		return err
 	}
 	s.bindingFactory[name] = factory
 	return nil

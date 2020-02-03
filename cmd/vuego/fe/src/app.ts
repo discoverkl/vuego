@@ -80,6 +80,7 @@ interface Option {
           return await root[name](...arguments);
         };
         root[name] = placeholder;
+        this.copyBind(name, root);
       }
       this.extendVuego(root[options.readyFuncName]);
       this.root = root;
@@ -259,6 +260,10 @@ interface Option {
         return promise;
       };
 
+      this.copyBind(bindingName, root);
+    }
+
+    copyBind(bindingName: string, root: {}) {
       // copy root["a.b"] to root.a.b
       if (bindingName.indexOf(".") !== -1) {
         const sp = bindingName.split(".");
