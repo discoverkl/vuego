@@ -48,7 +48,13 @@ func main() {
 	// vuego.Bind("math.pow", math.Pow)
 	// vuego.Bind("math.abs", math.Abs)
 	// vuego.Bind("utils.time", map[string]interface{}{"timer": timer})
-	// vuego.BindFactory("counter", func() interface{} { return newCounter() })
+	// vuego.BindFactory("counter", func(done <-chan bool) interface{} { 
+	// 	go func() {
+	// 		<-done
+	// 		log.Println("page done")
+	// 	}()
+	// 	return newCounter() 
+	// })
 
 	if err := vuego.ListenAndServe(":8000", http.Dir("./fe/dist")); err != nil {
 		log.Fatal(err)

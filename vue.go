@@ -21,7 +21,7 @@ var dev = one.InDevMode("vuego")
 const ReadyFuncName = "Vuego"
 const ContextBindingName = "context"
 
-type ObjectFactory func() interface{}
+type ObjectFactory func(done <-chan bool) interface{}
 
 var Prefix string
 
@@ -206,7 +206,7 @@ func (s *FileServer) Bind(name string, f interface{}) error {
 	return nil
 }
 
-func (s *FileServer) BindObjectFactory(name string, factory func() interface{}) error {
+func (s *FileServer) BindObjectFactory(name string, factory ObjectFactory) error {
 	if factory == nil {
 		return fmt.Errorf("argument factory is required")
 	}
@@ -233,6 +233,10 @@ type member struct {
 // ready(0) -> started(1+) -> done(0)
 func (s *FileServer) serveClientConn(ws *websocket.Conn) {
 	s.wg.Add(1)
+	done := make(chan bool)
+	defer func() {
+		close(done)
+	}()
 	defer func() {
 		<-time.After(time.Millisecond * 200) // support fast page refresh
 		s.wg.Done()
@@ -264,7 +268,7 @@ func (s *FileServer) serveClientConn(ws *websocket.Conn) {
 		collect(name, target)
 	}
 	for name, factory := range s.bindingFactory {
-		collect(name, factory())
+		collect(name, factory(done))
 	}
 
 	err = p.bindMap(binds)
