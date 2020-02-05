@@ -48,15 +48,21 @@ func main() {
 	// vuego.Bind("math.pow", math.Pow)
 	// vuego.Bind("math.abs", math.Abs)
 	// vuego.Bind("utils.time", map[string]interface{}{"timer": timer})
-	// vuego.BindFactory("counter", func(done <-chan bool) interface{} { 
+	// vuego.BindFactory("counter", func(done <-chan bool) interface{} {
 	// 	go func() {
 	// 		<-done
 	// 		log.Println("page done")
 	// 	}()
-	// 	return newCounter() 
+	// 	return newCounter()
 	// })
 
-	if err := vuego.ListenAndServe(":8000", http.Dir("./fe/dist")); err != nil {
+	// vuego.Auth = vuego.BasicAuth(func(user, pass string) bool {
+	// 	return user == "admin" && pass == "123"
+	// })
+
+	err := vuego.ListenAndServe(":8000", http.Dir("./fe/dist"))
+	// err := vuego.ListenAndServeTLS(":8000", http.Dir("./fe/dist"), "server.crt", "server.key")
+	if err != nil {
 		log.Fatal(err)
 	}
 }

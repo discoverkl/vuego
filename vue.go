@@ -25,6 +25,8 @@ type ObjectFactory func(done <-chan bool) interface{}
 
 var Prefix string
 
+var Auth func(http.HandlerFunc) http.HandlerFunc
+
 // Bind one api for javascript.
 func Bind(name string, f interface{}) {
 	err := DefaultServer.Bind(name, f)
@@ -57,9 +59,18 @@ func Done() <-chan struct{} {
 
 func ListenAndServe(addr string, root http.FileSystem) error {
 	DefaultServer.Prefix = Prefix
+	DefaultServer.Auth = Auth
 	DefaultServer.root = root
 	DefaultServer.Addr = addr
 	return DefaultServer.ListenAndServe()
+}
+
+func ListenAndServeTLS(addr string, root http.FileSystem, certFile, keyFile string) error {
+	DefaultServer.Prefix = Prefix
+	DefaultServer.Auth = Auth
+	DefaultServer.root = root
+	DefaultServer.Addr = addr
+	return DefaultServer.ListenAndServeTLS(certFile, keyFile)
 }
 
 var DefaultServer *FileServer
@@ -76,6 +87,7 @@ type FileServer struct {
 	Listener   net.Listener
 	root       http.FileSystem // optional for default instance
 	Prefix     string          // path prefix
+	Auth 	   func(http.HandlerFunc) http.HandlerFunc
 
 	server   *http.Server
 	serveMux *http.ServeMux
@@ -119,6 +131,22 @@ func NewFileServer(root http.FileSystem) *FileServer {
 }
 
 func (s *FileServer) ListenAndServe() error {
+	s.installHandlers(false)
+	if s.Listener != nil {
+		return s.server.Serve(s.Listener)
+	}
+	return s.server.ListenAndServe()
+}
+
+func (s *FileServer) ListenAndServeTLS(certFile, keyFile string) error {
+	s.installHandlers(true)
+	if s.Listener != nil {
+		return s.server.ServeTLS(s.Listener, certFile, keyFile)
+	}
+	return s.server.ListenAndServeTLS(certFile, keyFile)
+}
+
+func (s *FileServer) installHandlers(tls bool) {
 	prefix := s.Prefix
 	if prefix != "" && prefix[0] != '/' {
 		panic(fmt.Sprintf("Prefix must start with '/', got: %s", prefix))
@@ -127,19 +155,18 @@ func (s *FileServer) ListenAndServe() error {
 	if dev {
 		log.Printf("with prefix: %s", prefix)
 	}
-
-	s.handleVuego(prefix)
-
+	s.handleVuego(prefix, tls)
 	s.serveMux.Handle(prefix+"/", http.StripPrefix(prefix, http.FileServer(s.root)))
-	if s.Listener != nil {
-		return s.server.Serve(s.Listener)
-	}
+
 	addr := s.Addr
 	if addr == "" {
 		addr = ":80"
 	}
 	s.server.Addr = addr
-	return s.server.ListenAndServe()
+
+	if s.Auth != nil {
+		s.server.Handler = s.Auth(s.serveMux.ServeHTTP)
+	}
 }
 
 func (s *FileServer) Shutdown(ctx context.Context) error {
@@ -158,7 +185,7 @@ func (s *FileServer) closeLocalServer() {
 	})
 }
 
-func (s *FileServer) handleVuego(prefix string) {
+func (s *FileServer) handleVuego(prefix string, tls bool) {
 	serverPath := s.ServerPath
 	if serverPath == "" {
 		serverPath = defaultServerPath
@@ -179,6 +206,7 @@ func (s *FileServer) handleVuego(prefix string) {
 		}
 
 		clientScript := injectOptions(&jsOption{
+			TLS: tls,
 			Prefix:   prefix,
 			Search:   jsQuery,
 			Bindings: names,
@@ -235,17 +263,6 @@ type member struct {
 	Name  string
 	Value reflect.Value
 }
-
-// func (s *FileServer) BindObject(name string, i interface{}) error {
-// 	binds, err := s.getBindings(name, i)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	for name, f := range binds {
-// 		_ = s.Bind(name, f)
-// 	}
-// 	return nil
-// }
 
 // ready(0) -> started(1+) -> done(0)
 func (s *FileServer) serveClientConn(ws *websocket.Conn) {
@@ -305,4 +322,19 @@ func (s *FileServer) serveClientConn(ws *websocket.Conn) {
 
 func getScriptPath(serverPath string) string {
 	return fmt.Sprintf("%s.js", serverPath)
+}
+
+func BasicAuth(auth func(user string, pass string) bool) func(http.HandlerFunc) http.HandlerFunc {
+	return func(handler http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			user, pass, ok := r.BasicAuth()
+			if !ok || !auth(user, pass) {
+				w.Header().Set("www-authenticate", `Basic realm="nothing"`)
+				w.WriteHeader(http.StatusUnauthorized)
+				fmt.Fprint(w, http.StatusText(http.StatusUnauthorized))
+				return
+			}
+			handler(w, r)
+		}
+	}
 }

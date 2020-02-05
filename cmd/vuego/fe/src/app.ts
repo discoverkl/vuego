@@ -24,6 +24,7 @@ interface RefCallMessage {
 
 interface Option {
   dev: boolean;
+  tls: boolean;
   readyFuncName: string; // bind name for ready function
   prefix: string; // publicPath
   search: string; // search string used to fetch this script
@@ -37,6 +38,7 @@ interface Option {
   if (options === null) {
     options = {
       dev: true,
+      tls: false,
       readyFuncName: "Vuego",
       prefix: "",
       search: "?name=api",
@@ -331,7 +333,9 @@ interface Option {
 
   function main() {
     let host = window.location.host;
-    let ws = new WebSocket("ws://" + host + options.prefix + "/vuego");
+    let ws = new WebSocket(
+      (options.tls ? "wss://" : "ws://") + host + options.prefix + "/vuego"
+    );
     let vuego = new Vuego(ws);
     let api = vuego.getapi();
 

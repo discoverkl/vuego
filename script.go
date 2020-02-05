@@ -8,6 +8,7 @@ import (
 
 type jsOption struct {
 	Dev bool `json:"dev"`
+	TLS bool `json:"tls"`
 	ReadyFuncName string `json:"readyFuncName"`
 	Prefix string `json:"prefix"`
 	Search string `json:"search"`
@@ -62,6 +63,7 @@ var script = `var __awaiter = (this && this.__awaiter) || function (thisArg, _ar
     if (options === null) {
         options = {
             dev: true,
+            tls: false,
             readyFuncName: "Vuego",
             prefix: "",
             search: "?name=api",
@@ -339,7 +341,7 @@ var script = `var __awaiter = (this && this.__awaiter) || function (thisArg, _ar
     }
     function main() {
         let host = window.location.host;
-        let ws = new WebSocket("ws://" + host + options.prefix + "/vuego");
+        let ws = new WebSocket((options.tls ? "wss://" : "ws://") + host + options.prefix + "/vuego");
         let vuego = new Vuego(ws);
         let api = vuego.getapi();
         let exportAPI = () => {
