@@ -7,6 +7,7 @@
       ref="inputElement"
     /> -->
     <div class="editor" ref="inputElement" @keydown="onInputKey"></div>
+    <!-- <div class="status" ref="statusElement">some text</div> -->
     <div class="error">
       {{ err }}
     </div>
@@ -193,10 +194,13 @@ function useHook(props, state, active, lastLoadedText) {
   width: 100%;
   height: 100%;
   position: relative;
+  /* display: flex;
+  flex-direction: column; */
 }
 
 .editor {
   width: 100%;
+  /* height: calc(100% - 2 * 5px - 25px); */
   height: calc(100% - 2 * 5px);
   /* font-size: inherit;
   font-family: inherit; */
@@ -204,6 +208,13 @@ function useHook(props, state, active, lastLoadedText) {
   /* background: red; */
   background: #1e1e1e;
 }
+/* 
+.status {
+  height: 25px;
+  z-index: 1;
+  background: white;
+  padding: 4px;
+} */
 
 .error {
   position: absolute;
