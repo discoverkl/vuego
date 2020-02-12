@@ -37,22 +37,31 @@ type browserPage struct {
 }
 
 func NewPage(root http.FileSystem) (vuego.Window, error) {
-	return NewNativeWindow(root, &browserNativeWindow{})
+	return NewNativeWindow(root, &browserNativeWindow{}, nil)
 }
 
-func NewNativeWindow(root http.FileSystem, win NativeWindow) (vuego.Window, error) {
+func NewPageMapURL(root http.FileSystem, mapURL func(net.Listener) string) (vuego.Window, error) {
+	return NewNativeWindow(root, &browserNativeWindow{}, mapURL)
+}
+
+func NewNativeWindow(root http.FileSystem, win NativeWindow, mapURL func(net.Listener) string) (vuego.Window, error) {
 	// ** local server
 	listener, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		return nil, err
 	}
 	addr := listener.Addr().(*net.TCPAddr)
-	url := fmt.Sprintf("http://localhost:%d", addr.Port)
 	log.Println("using port:", addr.Port)
 
 	server := vuego.NewFileServer(root)
 	server.Listener = listener
 	go server.ListenAndServe()
+
+	var url string
+	url = fmt.Sprintf("http://localhost:%d", addr.Port)
+	if mapURL != nil {
+		url = mapURL(listener)
+	}
 
 	// ** brower page
 	if err := win.Open(url); err != nil {

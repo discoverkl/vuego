@@ -89,7 +89,17 @@ func NewApp(root http.FileSystem, x, y int, width, height int, chromeArgs ...str
 		chromeDone: make(chan struct{}),
 		conf:       conf,
 	}
-	return browser.NewNativeWindow(root, c)
+	return browser.NewNativeWindow(root, c, nil)
+}
+
+func NewAppMapURL(root http.FileSystem, x, y int, width, height int, mapURL func(net.Listener) string) chromeArgs ...string) (vuego.Window, error) {
+	conf := config{x, y, width, height, chromeArgs}
+	c := &chromePage{
+		cmd:        nil,
+		chromeDone: make(chan struct{}),
+		conf:       conf,
+	}
+	return browser.NewNativeWindow(root, c, mapURL)
 }
 
 func newChromeWithArgs(chromeBinary string, args ...string) (*exec.Cmd, error) {
