@@ -2,11 +2,12 @@ package chrome
 
 import (
 	"fmt"
-	"path/filepath"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 
 	"github.com/discoverkl/vuego"
@@ -92,7 +93,7 @@ func NewApp(root http.FileSystem, x, y int, width, height int, chromeArgs ...str
 	return browser.NewNativeWindow(root, c, nil)
 }
 
-func NewAppMapURL(root http.FileSystem, x, y int, width, height int, mapURL func(net.Listener) string) chromeArgs ...string) (vuego.Window, error) {
+func NewAppMapURL(root http.FileSystem, x, y int, width, height int, mapURL func(net.Listener) string, chromeArgs ...string) (vuego.Window, error) {
 	conf := config{x, y, width, height, chromeArgs}
 	c := &chromePage{
 		cmd:        nil,
