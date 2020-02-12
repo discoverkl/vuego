@@ -21,7 +21,12 @@ var dev = one.InDevMode("vuego")
 const ReadyFuncName = "Vuego"
 const ContextBindingName = "context"
 
-type ObjectFactory func(done <-chan bool) interface{}
+type FactoryContext struct {
+	Request *http.Request
+	Done <-chan bool
+}
+
+type ObjectFactory func(*FactoryContext) interface{}
 
 var Prefix string
 
@@ -251,7 +256,7 @@ func (s *FileServer) BindObjectFactory(name string, factory ObjectFactory) error
 	// preflight check
 	done := make(chan bool)
 	defer close(done)
-	f := factory(done)
+	f := factory(&FactoryContext{Request: nil, Done: done})
 	if err := s.collectBindObject(name, f); err != nil {
 		return err
 	}
@@ -302,7 +307,7 @@ func (s *FileServer) serveClientConn(ws *websocket.Conn) {
 		collect(name, target)
 	}
 	for name, factory := range s.bindingFactory {
-		collect(name, factory(done))
+		collect(name, factory(&FactoryContext{ Request: ws.Request(), Done: done }))
 	}
 
 	err = p.bindMap(binds)

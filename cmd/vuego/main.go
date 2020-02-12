@@ -48,9 +48,9 @@ func main() {
 	// vuego.Bind("math.pow", math.Pow)
 	// vuego.Bind("math.abs", math.Abs)
 	// vuego.Bind("utils.time", map[string]interface{}{"timer": timer})
-	// vuego.BindFactory("counter", func(done <-chan bool) interface{} {
+	// vuego.BindFactory("counter", func(c *vuego.FactoryContext) interface{} {
 	// 	go func() {
-	// 		<-done
+	// 		<-c.Done
 	// 		log.Println("page done")
 	// 	}()
 	// 	return newCounter()
