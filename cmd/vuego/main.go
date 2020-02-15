@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"log"
-	"net/http"
 	"time"
 
 	"github.com/discoverkl/vuego"
@@ -41,28 +40,32 @@ func (c *Counter) Add() int {
 	return c.sum
 }
 
-func main() {
-	vuego.Bind("sum", sum)
-	vuego.Bind("timer", timer)
 
-	// vuego.Bind("math.pow", math.Pow)
-	// vuego.Bind("math.abs", math.Abs)
-	// vuego.Bind("utils.time", map[string]interface{}{"timer": timer})
-	// vuego.BindFactory("counter", func(c *vuego.FactoryContext) interface{} {
+func main() {
+	ui := vuego.NewUI(
+		vuego.OnlinePort(8000),
+		// vuego.OnlineAuth(vuego.BasicAuth(func(user, pass string) bool {
+		// 	return user == "admin" && pass == "123"
+		// })),
+		// vuego.OnlineTLS("server.crt", "server.key"),
+	)
+
+	ui.Bind(vuego.Func("sum", sum))
+	ui.Bind(vuego.Func("timer", timer))
+
+	// ui.BindFunc("math.pow", math.Pow)
+	// ui.BindFunc("math.abs", math.Abs)
+	// ui.BindPrefix("utils.time", vuego.Map(map[string]interface{}{"timer": timer}))
+	// ui.BindPrefix("counter", vuego.DelayObject(&Counter{}, func(c *vuego.UIContext) vuego.Bindings {
 	// 	go func() {
 	// 		<-c.Done
 	// 		log.Println("page done")
 	// 	}()
-	// 	return newCounter()
-	// })
+	// 	return vuego.Object(newCounter())
+	// }))
 
-	// vuego.Auth = vuego.BasicAuth(func(user, pass string) bool {
-	// 	return user == "admin" && pass == "123"
-	// })
 
-	err := vuego.ListenAndServe(":8000", http.Dir("./fe/dist"))
-	// err := vuego.ListenAndServeTLS(":8000", http.Dir("./fe/dist"), "server.crt", "server.key")
-	if err != nil {
+	if err := ui.Run(); err != nil {
 		log.Fatal(err)
 	}
 }

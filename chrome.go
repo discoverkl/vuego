@@ -1,4 +1,4 @@
-package chrome
+package vuego
 
 import (
 	"fmt"
@@ -10,15 +10,12 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/discoverkl/vuego"
-	"github.com/discoverkl/vuego/browser"
 	"github.com/discoverkl/vuego/homedir"
-	"github.com/discoverkl/vuego/one"
 )
 
-var dev = one.InDevMode("chrome")
+var ChromeBinary string
 
-type config struct {
+type chromeConfig struct {
 	x          int
 	y          int
 	width      int
@@ -29,7 +26,7 @@ type config struct {
 type chromePage struct {
 	cmd        *exec.Cmd
 	chromeDone chan struct{}
-	conf       config
+	conf       chromeConfig
 }
 
 func (c *chromePage) Open(url string) error {
@@ -45,7 +42,8 @@ func (c *chromePage) Open(url string) error {
 
 	} else {
 		// use fix data dir for chrome app
-		dir, err := homedir.Dir()
+		var dir string
+		dir, err = homedir.Dir()
 		if err != nil {
 			return err
 		}
@@ -61,6 +59,10 @@ func (c *chromePage) Open(url string) error {
 		args = append(args, c.conf.chromeArgs...)
 
 		c.cmd, err = newChromeWithArgs(findChrome(), args...)
+	}
+
+	if err != nil {
+		return err
 	}
 
 	// subprocess waiter
@@ -79,28 +81,28 @@ func (c *chromePage) Close() {
 	c.ensureAppClosed()
 }
 
-func NewPage(root http.FileSystem) (vuego.Window, error) {
+func NewChromePage(root http.FileSystem) (Window, error) {
 	return NewApp(root, 0, 0, -1, -1)
 }
 
-func NewApp(root http.FileSystem, x, y int, width, height int, chromeArgs ...string) (vuego.Window, error) {
-	conf := config{x, y, width, height, chromeArgs}
+func NewApp(root http.FileSystem, x, y int, width, height int, chromeArgs ...string) (Window, error) {
+	conf := chromeConfig{x, y, width, height, chromeArgs}
 	c := &chromePage{
 		cmd:        nil,
 		chromeDone: make(chan struct{}),
 		conf:       conf,
 	}
-	return browser.NewNativeWindow(root, c, nil)
+	return NewNativeWindow(root, c, nil)
 }
 
-func NewAppMapURL(root http.FileSystem, x, y int, width, height int, mapURL func(net.Listener) string, chromeArgs ...string) (vuego.Window, error) {
-	conf := config{x, y, width, height, chromeArgs}
+func NewAppMapURL(root http.FileSystem, x, y int, width, height int, mapURL func(net.Listener) string, chromeArgs ...string) (Window, error) {
+	conf := chromeConfig{x, y, width, height, chromeArgs}
 	c := &chromePage{
 		cmd:        nil,
 		chromeDone: make(chan struct{}),
 		conf:       conf,
 	}
-	return browser.NewNativeWindow(root, c, mapURL)
+	return NewNativeWindow(root, c, mapURL)
 }
 
 func newChromeWithArgs(chromeBinary string, args ...string) (*exec.Cmd, error) {
@@ -167,6 +169,9 @@ var defaultAppArgs = []string{
 }
 
 func findChrome() string {
+	if ChromeBinary != "" {
+		return ChromeBinary
+	}
 	var paths []string
 	switch runtime.GOOS {
 	case "darwin":

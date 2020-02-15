@@ -1,18 +1,18 @@
 package vuego
 
 import (
-	"fmt"
 	"encoding/json"
+	"fmt"
 	"strings"
 )
 
 type jsOption struct {
-	Dev bool `json:"dev"`
-	TLS bool `json:"tls"`
-	ReadyFuncName string `json:"readyFuncName"`
-	Prefix string `json:"prefix"`
-	Search string `json:"search"`
-	Bindings []string `json:"bindings"`
+	Dev           bool     `json:"dev"`
+	TLS           bool     `json:"tls"`
+	ReadyFuncName string   `json:"readyFuncName"`
+	Prefix        string   `json:"prefix"`
+	Search        string   `json:"search"`
+	Bindings      []string `json:"bindings"`
 }
 
 func init() {
@@ -24,7 +24,7 @@ func injectOptions(op *jsOption) string {
 	if op == nil {
 		op = &jsOption{}
 	}
-	op.Dev = false	
+	op.Dev = false
 	op.ReadyFuncName = ReadyFuncName
 	raw, _ := json.MarshalIndent(op, "    ", "    ")
 	text := string(raw)

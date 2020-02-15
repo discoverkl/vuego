@@ -1,4 +1,4 @@
-package browser
+package vuego
 
 import (
 	"fmt"
@@ -8,43 +8,38 @@ import (
 	"os/exec"
 	"runtime"
 	"sync"
-
-	"github.com/discoverkl/vuego"
-	"github.com/discoverkl/vuego/one"
 )
-
-var dev = one.InDevMode("browser")
 
 type NativeWindow interface {
 	Open(url string) error
 	Close()
 }
 
-type browserNativeWindow struct {}
+type browserNativeWindow struct{}
 
 func (*browserNativeWindow) Open(url string) error {
 	openBrowser(url)
 	return nil
 }
 
-func (*browserNativeWindow) Close(){}
+func (*browserNativeWindow) Close() {}
 
 type browserPage struct {
-	server    *vuego.FileServer
+	server    *FileServer
 	closeOnce sync.Once
 	done      chan struct{}
-	win NativeWindow
+	win       NativeWindow
 }
 
-func NewPage(root http.FileSystem) (vuego.Window, error) {
+func NewPage(root http.FileSystem) (Window, error) {
 	return NewNativeWindow(root, &browserNativeWindow{}, nil)
 }
 
-func NewPageMapURL(root http.FileSystem, mapURL func(net.Listener) string) (vuego.Window, error) {
+func NewPageMapURL(root http.FileSystem, mapURL func(net.Listener) string) (Window, error) {
 	return NewNativeWindow(root, &browserNativeWindow{}, mapURL)
 }
 
-func NewNativeWindow(root http.FileSystem, win NativeWindow, mapURL func(net.Listener) string) (vuego.Window, error) {
+func NewNativeWindow(root http.FileSystem, win NativeWindow, mapURL func(net.Listener) string) (Window, error) {
 	// ** local server
 	listener, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
@@ -53,7 +48,7 @@ func NewNativeWindow(root http.FileSystem, win NativeWindow, mapURL func(net.Lis
 	addr := listener.Addr().(*net.TCPAddr)
 	log.Println("using port:", addr.Port)
 
-	server := vuego.NewFileServer(root)
+	server := NewFileServer(root)
 	server.Listener = listener
 	go server.ListenAndServe()
 
@@ -70,24 +65,28 @@ func NewNativeWindow(root http.FileSystem, win NativeWindow, mapURL func(net.Lis
 
 	c := &browserPage{
 		server: server,
-		done: make(chan struct{}),
-		win: win,
+		done:   make(chan struct{}),
+		win:    win,
 	}
 
 	// 1/2 server.Done() => done
 	// 2/2 user call Close() => done
 	go func() {
 		<-server.Done()
-		c.Close()		
+		c.Close()
 	}()
 	return c, nil
 }
 
-func (c *browserPage) Bind(name string, f interface{}) error {
-	return c.server.Bind(name, f)
+// func (c *browserPage) Bind(name string, f interface{}) error {
+// 	return c.server.Bind(name, f)
+// }
+
+func (c *browserPage) Bind(b Bindings) error {
+	return c.server.Bind(b)
 }
 
-func (c *browserPage) Eval(js string) vuego.Value {
+func (c *browserPage) Eval(js string) Value {
 	panic("Not Implemented")
 }
 

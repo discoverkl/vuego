@@ -1,8 +1,8 @@
 package vuego
 
 import (
-	"encoding/json"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log"
@@ -39,7 +39,7 @@ type callParams struct {
 }
 
 type refCallParams struct {
-	Seq  int               `json:"seq"`
+	Seq int `json:"seq"`
 }
 
 type h map[string]interface{}
@@ -50,9 +50,9 @@ type jsClient struct {
 	pending map[int]chan result
 	ws      *websocket.Conn
 	binding map[string]bindingFunc
-	refs map[int]func()				// int -> func()
-	done chan struct{}				// done = readLoop() return = receive EOF
-	cancel context.CancelFunc
+	refs    map[int]func() // int -> func()
+	done    chan struct{}  // done = readLoop() return = receive EOF
+	cancel  context.CancelFunc
 }
 
 func newJSClient(ws *websocket.Conn) (*jsClient, error) {
@@ -60,8 +60,8 @@ func newJSClient(ws *websocket.Conn) (*jsClient, error) {
 		ws:      ws,
 		pending: map[int]chan result{},
 		binding: map[string]bindingFunc{},
-		refs: map[int]func(){},
-		done: make(chan struct{}),
+		refs:    map[int]func(){},
+		done:    make(chan struct{}),
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel

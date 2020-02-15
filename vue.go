@@ -1,345 +1,197 @@
 package vuego
 
 import (
-	"context"
 	"fmt"
 	"log"
-	"net"
-	"net/http"
-	"reflect"
+	"os"
 	"strings"
-	"sync"
-	"time"
 
-	"github.com/discoverkl/vuego/one"
-	"golang.org/x/net/websocket"
+	"github.com/google/shlex"
 )
 
-var dev = one.InDevMode("vuego")
-
-// ReadyFuncName is an async ready function in api object.
-const ReadyFuncName = "Vuego"
-const ContextBindingName = "context"
-
-type FactoryContext struct {
-	Request *http.Request
-	Done <-chan bool
+type UI interface {
+	Run() error
+	// Done() <-chan struct{}
+	Bindable
+	RunMode
 }
 
-type ObjectFactory func(*FactoryContext) interface{}
-
-var Prefix string
-
-var Auth func(http.HandlerFunc) http.HandlerFunc
-
-// Bind one api for javascript.
-func Bind(name string, f interface{}) {
-	err := DefaultServer.Bind(name, f)
-	if err != nil {
-		panic(err)
-	}
+type Bindable interface {
+	Bind(b Bindings)
+	BindPrefix(name string, b Bindings)
+	BindFunc(name string, fn interface{})
+	BindObject(obj interface{})
+	BindMap(m map[string]interface{})
 }
 
-// // BindObject bind all public members for javascript.
-// // If name is empty, bind directly to the api object.
-// func BindObject(name string, i interface{}) {
-// 	err := DefaultServer.BindObject(name, i)
-// 	if err != nil {
-// 		panic(err)
-// 	}
-// }
-
-// BindFactory call factory and bind its' return value for each client session.
-func BindFactory(name string, factory ObjectFactory) {
-	err := DefaultServer.BindObjectFactory(name, factory)
-	if err != nil {
-		panic(err)
-	}
+type ui struct {
+	conf *uiConfig
+	runMode
+	confError error
+	bindings  []Bindings
 }
 
-// Done chan is closed when some client had connected and all clients are gone now.
-func Done() <-chan struct{} {
-	return DefaultServer.Done()
-}
+func NewUI(ops ...Option) UI {
+	var err error
+	var confError error
 
-func ListenAndServe(addr string, root http.FileSystem) error {
-	DefaultServer.Prefix = Prefix
-	DefaultServer.Auth = Auth
-	DefaultServer.root = root
-	DefaultServer.Addr = addr
-	return DefaultServer.ListenAndServe()
-}
-
-func ListenAndServeTLS(addr string, root http.FileSystem, certFile, keyFile string) error {
-	DefaultServer.Prefix = Prefix
-	DefaultServer.Auth = Auth
-	DefaultServer.root = root
-	DefaultServer.Addr = addr
-	return DefaultServer.ListenAndServeTLS(certFile, keyFile)
-}
-
-var DefaultServer *FileServer
-var defaultServerPath = "/vuego"
-var once sync.Once
-
-func init() {
-	DefaultServer = NewFileServer(nil)
-}
-
-type FileServer struct {
-	Addr       string
-	ServerPath string
-	Listener   net.Listener
-	root       http.FileSystem // optional for default instance
-	Prefix     string          // path prefix
-	Auth 	   func(http.HandlerFunc) http.HandlerFunc
-
-	server   *http.Server
-	serveMux *http.ServeMux
-
-	binding        map[string]interface{}
-	bindingFactory map[string]ObjectFactory
-	bindingNames map[string]bool	// for js placeholder
-
-	// local server done
-	wg              sync.WaitGroup
-	once            sync.Once
-	started         chan struct{}
-	localServerDone chan struct{}
-	doneOnce        sync.Once
-}
-
-func NewFileServer(root http.FileSystem) *FileServer {
-	serveMux := http.NewServeMux()
-	s := &FileServer{
-		root:            root,
-		serveMux:        serveMux,
-		server:          &http.Server{Handler: serveMux},
-		binding:         map[string]interface{}{},
-		bindingFactory:  map[string]ObjectFactory{},
-		bindingNames: map[string]bool{},
-		started:         make(chan struct{}),
-		localServerDone: make(chan struct{}),
-	}
-	go func() {
-		<-s.started
-		if dev {
-			log.Println("server active")
+	conf := defaultUIConfig()
+	for _, op := range ops {
+		err = op(conf)
+		if err != nil && confError == nil {
+			confError = fmt.Errorf("ui config: %w", err)
 		}
-		s.wg.Wait()
-		if dev {
-			log.Println("server done")
+	}
+
+	app := &ui{conf: conf, confError: confError}
+	app.useRunMode()
+	app.useSpecialEnvSetting()
+	return app
+}
+
+func (u *ui) Bind(b Bindings) {
+	u.bindings = append(u.bindings, b)
+}
+
+func (u *ui) BindPrefix(name string, b Bindings) {
+	u.Bind(Prefix(name, b))
+}
+
+func (u *ui) BindFunc(name string, fn interface{}) {
+	u.Bind(Func(name, fn))
+}
+
+func (u *ui) BindObject(obj interface{}) {
+	u.Bind(Object(obj))
+}
+
+func (u *ui) BindMap(m map[string]interface{}) {
+	u.Bind(Map(m))
+}
+
+func (u *ui) Run() error {
+	c := u.conf
+
+	if u.confError != nil {
+		return u.confError
+	}
+
+	if !c.Quiet {
+		log.Println("run mode:", u.runMode)
+	}
+	if u.runMode.Empty() {
+		return fmt.Errorf("run mode is not set")
+	}
+
+	var win Window
+	var err error
+
+	switch true {
+	case u.IsApp():
+		if c.AppChromeBinary != "" {
+			ChromeBinary = c.AppChromeBinary
 		}
-		s.closeLocalServer()
-	}()
-	return s
-}
-
-func (s *FileServer) ListenAndServe() error {
-	s.installHandlers(false)
-	if s.Listener != nil {
-		return s.server.Serve(s.Listener)
-	}
-	return s.server.ListenAndServe()
-}
-
-func (s *FileServer) ListenAndServeTLS(certFile, keyFile string) error {
-	s.installHandlers(true)
-	if s.Listener != nil {
-		return s.server.ServeTLS(s.Listener, certFile, keyFile)
-	}
-	return s.server.ListenAndServeTLS(certFile, keyFile)
-}
-
-func (s *FileServer) installHandlers(tls bool) {
-	prefix := s.Prefix
-	if prefix != "" && prefix[0] != '/' {
-		panic(fmt.Sprintf("Prefix must start with '/', got: %s", prefix))
-	}
-	prefix = strings.TrimRight(prefix, "/")
-	if dev {
-		log.Printf("with prefix: %s", prefix)
-	}
-	s.handleVuego(prefix, tls)
-	s.serveMux.Handle(prefix+"/", http.StripPrefix(prefix, http.FileServer(s.root)))
-
-	addr := s.Addr
-	if addr == "" {
-		addr = ":80"
-	}
-	s.server.Addr = addr
-
-	if s.Auth != nil {
-		s.server.Handler = s.Auth(s.serveMux.ServeHTTP)
-	}
-}
-
-func (s *FileServer) Shutdown(ctx context.Context) error {
-	s.closeLocalServer()
-	return s.server.Shutdown(context.Background())
-}
-
-func (s *FileServer) Close() error {
-	s.closeLocalServer()
-	return s.server.Close()
-}
-
-func (s *FileServer) closeLocalServer() {
-	s.doneOnce.Do(func() {
-		close(s.localServerDone)
-	})
-}
-
-func (s *FileServer) handleVuego(prefix string, tls bool) {
-	serverPath := s.ServerPath
-	if serverPath == "" {
-		serverPath = defaultServerPath
-	}
-	if serverPath[0] != '/' {
-		panic("serverPath must start with '/'")
-	}
-
-	s.serveMux.Handle(prefix+serverPath, http.StripPrefix(prefix, websocket.Handler(s.serveClientConn)))
-	s.serveMux.Handle(prefix+getScriptPath(serverPath), http.StripPrefix(prefix, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		w.Header().Add("Content-Type", "text/javascript")
-		jsQuery := fmt.Sprintf("?%s", req.URL.RawQuery)
-		// bytes, _ := json.Marshal(jsQuery)
-
-		names := []string{}
-		for name, _ := range s.bindingNames {
-			names = append(names, name)
+		if c.LocalMapURL == nil {
+			win, err = NewApp(c.Root, c.AppX, c.AppY, c.AppWidth, c.AppHeight, c.AppChromeArgs...)
+		} else {
+			win, err = NewAppMapURL(c.Root, c.AppX, c.AppY, c.AppWidth, c.AppHeight, c.LocalMapURL, c.AppChromeArgs...)
 		}
-
-		clientScript := injectOptions(&jsOption{
-			TLS: tls,
-			Prefix:   prefix,
-			Search:   jsQuery,
-			Bindings: names,
-		})
-		// clientScript = mapScript(clientScript, `"/vuego"`, fmt.Sprintf(`"%s"`, prefix + serverPath))
-		// clientScript = mapScript(clientScript, "let search = undefined", fmt.Sprintf("let search = %s", string(bytes)))
-		fmt.Fprint(w, clientScript)
-	})))
-}
-
-func (s *FileServer) Done() <-chan struct{} {
-	return s.localServerDone
-}
-
-func (s *FileServer) Bind(name string, f interface{}) error {
-	if err := s.collectBindObject(name, f); err != nil {
-		return err
-	}
-	s.binding[name] = f
-	return nil
-}
-
-func (s *FileServer) collectBindObject(name string, f interface{}) error {
-	// preflight check
-	hold, err := getBindings(name, f)
-	if err != nil {
-		return fmt.Errorf("invalid binding: %w", err)
-	}
-	for subName, target := range hold {
-		if err = checkBindFunc(subName, target); err != nil {
-			return fmt.Errorf("invalid binding: %w", err)
-		}
-		s.bindingNames[subName] = true
-	}
-	return nil
-}
-
-func (s *FileServer) BindObjectFactory(name string, factory ObjectFactory) error {
-	if factory == nil {
-		return fmt.Errorf("argument factory is required")
-	}
-	// preflight check
-	done := make(chan bool)
-	defer close(done)
-	f := factory(&FactoryContext{Request: nil, Done: done})
-	if err := s.collectBindObject(name, f); err != nil {
-		return err
-	}
-	s.bindingFactory[name] = factory
-	return nil
-}
-
-type member struct {
-	Name  string
-	Value reflect.Value
-}
-
-// ready(0) -> started(1+) -> done(0)
-func (s *FileServer) serveClientConn(ws *websocket.Conn) {
-	s.wg.Add(1)
-	done := make(chan bool)
-	defer func() {
-		close(done)
-	}()
-	defer func() {
-		<-time.After(time.Millisecond * 200) // support fast page refresh
-		s.wg.Done()
-	}()
-
-	s.once.Do(func() {
-		close(s.started)
-	})
-
-	p, err := newPage(ws)
-	if err != nil {
-		log.Printf("attach websocket failed: %v", err)
-	}
-
-	// apply binding
-	binds := map[string]interface{}{}
-	collect := func(objName string, target interface{}) {
-		objBinds, err := getBindings(objName, target)
 		if err != nil {
-			log.Printf("get session bindings failed: %v", err)
-			return
+			return err
 		}
-		for name, f := range objBinds {
-			binds[name] = f
+	case u.IsPage():
+		if c.LocalMapURL == nil {
+			win, err = NewPage(c.Root)
+		} else {
+			win, err = NewPageMapURL(c.Root, c.LocalMapURL)
 		}
-	}
+		if err != nil {
+			return err
+		}
+	case u.IsOnline():
+		svr := NewFileServer(c.Root)
+		svr.Addr = c.OnlineAddr
+		svr.Listener = c.OnlineListener
+		svr.Prefix = c.OnlinePrefix
+		svr.Auth = c.OnlineAuth
 
-	for name, target := range s.binding {
-		collect(name, target)
-	}
-	for name, factory := range s.bindingFactory {
-		collect(name, factory(&FactoryContext{ Request: ws.Request(), Done: done }))
-	}
-
-	err = p.bindMap(binds)
-	if err != nil {
-		log.Printf("binding failed: %v", err)
-	}
-
-	// server ready
-	err = p.SetReady()
-	if err != nil {
-		log.Printf("failed to make page ready: %v", err)
-	}
-
-	// wait
-	<-p.Done()
-}
-
-func getScriptPath(serverPath string) string {
-	return fmt.Sprintf("%s.js", serverPath)
-}
-
-func BasicAuth(auth func(user string, pass string) bool) func(http.HandlerFunc) http.HandlerFunc {
-	return func(handler http.HandlerFunc) http.HandlerFunc {
-		return func(w http.ResponseWriter, r *http.Request) {
-			user, pass, ok := r.BasicAuth()
-			if !ok || !auth(user, pass) {
-				w.Header().Set("www-authenticate", `Basic realm="nothing"`)
-				w.WriteHeader(http.StatusUnauthorized)
-				fmt.Fprint(w, http.StatusText(http.StatusUnauthorized))
-				return
+		for _, b := range u.bindings {
+			err = svr.Bind(b)
+			if err != nil {
+				return err
 			}
-			handler(w, r)
 		}
+
+		if !c.Quiet {
+			log.Printf("listen on: %s", svr.Addr)
+		}
+
+		if c.OnlineCertFile != "" && c.OnlineKeyFile != "" {
+			return svr.ListenAndServeTLS(c.OnlineCertFile, c.OnlineKeyFile)
+		}
+		return svr.ListenAndServe()
+	default:
+		return fmt.Errorf("unsupported mode: %v", u)
+	}
+
+	for _, b := range u.bindings {
+		err = win.Bind(b)
+		if err != nil {
+			return err
+		}
+	}
+
+	<-win.Done()
+	return err
+}
+
+func (u *ui) Done() <-chan struct{} {
+	panic(nil)
+}
+
+//
+// private methods
+//
+
+func (u *ui) useRunMode() {
+	// get mode from env
+	mode := os.Getenv("MODE")
+	if mode == "" {
+		mode = os.Getenv("mode")
+	}
+	mode = strings.ToLower(mode)
+	override := strings.HasSuffix(mode, "!")
+	mode = strings.TrimRight(mode, "!")
+
+	if !override && u.conf.Mode != "" {
+		mode = u.conf.Mode
+	}
+
+	switch mode {
+	case "app":
+	case "page":
+	case "online":
+	default:
+		mode = "page"
+	}
+	u.runMode = runMode(mode)
+}
+
+func (u *ui) useSpecialEnvSetting() {
+	// chrome args
+	chromeEnv := os.Getenv("APP_CHROME_ARGS")
+	if chromeEnv != "" {
+		chromeArgs, err := shlex.Split(chromeEnv)
+		if err != nil {
+			log.Printf("parse env arguments failed for APP_CHROME_ARGS: %v", err)
+		} else {
+			u.conf.AppChromeArgs = append(u.conf.AppChromeArgs, chromeArgs...)
+		}
+	}
+
+	// chrome binary
+	chromePathEnv := os.Getenv("APP_CHROME_BINARY")
+	if chromePathEnv != "" {
+		u.conf.AppChromeBinary = chromePathEnv
 	}
 }
