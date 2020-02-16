@@ -1,10 +1,9 @@
+//go:generate go run github.com/markbates/pkger/cmd/pkger -o prime
 package main
 
-//go:generate go run github.com/markbates/pkger/cmd/pkger -o prime
 import (
 	"context"
 	"flag"
-	"fmt"
 	"log"
 	"sync"
 
@@ -23,11 +22,14 @@ func init() {
 }
 
 func main() {
-	ui.Bind("js2go", js2go)
+	app := ui.New(
+		ui.OnlinePort(port),
+		ui.Root(pkger.Dir("/prime/fe/dist")),
+	)
 
-	addr := fmt.Sprintf(":%d", port)
-	log.Printf("listen on: %s", addr)
-	if err := ui.ListenAndServe(addr, pkger.Dir("/prime/fe/dist")); err != nil {
+	app.BindFunc("js2go", js2go)
+
+	if err := app.Run(); err != nil {
 		log.Fatal(err)
 	}
 }

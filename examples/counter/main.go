@@ -28,12 +28,16 @@ func (c *counter) Value() int {
 
 func main() {
 	c := &counter{}
-	ui.Bind("counterAdd", c.Add)
-	ui.Bind("counterValue", c.Value)
 
-	addr := ":8000"
-	log.Printf("listen on: %s", addr)
-	if err := ui.ListenAndServe(addr, pkger.Dir("/counter/fe/dist")); err != nil {
+	app := ui.New(
+		ui.Root(pkger.Dir("/counter/fe/dist")),
+		ui.OnlinePort(8000),
+	)
+
+	app.BindFunc("counterAdd", c.Add)
+	app.BindFunc("counterValue", c.Value)
+
+	if err := app.Run(); err != nil {
 		log.Fatal(err)
 	}
 }

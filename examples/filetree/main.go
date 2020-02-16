@@ -3,7 +3,6 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -12,8 +11,6 @@ import (
 	"strings"
 
 	"github.com/discoverkl/vuego/ui"
-	"github.com/discoverkl/vuego/browser"
-	"github.com/discoverkl/vuego/chrome"
 	"github.com/markbates/pkger"
 )
 
@@ -77,9 +74,16 @@ func isFolder(f os.FileInfo, path string) bool {
 }
 
 func main() {
-	runWebServer()
-	// runLocalPage()
-	// runNativeApp()
+	app := ui.New(
+		ui.Root(pkger.Dir("/filetree/fe/dist")),
+		ui.OnlinePort(port),
+	)
+
+	app.BindFunc("openFolder", openFolder)
+
+	if err := app.Run(); err != nil {
+		log.Fatal(err)
+	}
 }
 
 var port int
@@ -87,35 +91,4 @@ var port int
 func init() {
 	flag.IntVar(&port, "p", 80, "binding port")
 	flag.Parse()
-}
-
-// run a normal web server
-func runWebServer() {
-	ui.Bind("openFolder", openFolder)
-
-	addr := fmt.Sprintf(":%d", port)
-	log.Printf("listen on: %s", addr)
-	if err := ui.ListenAndServe(addr, pkger.Dir("/filetree/fe/dist")); err != nil {
-		log.Fatal(err)
-	}
-}
-
-// run a local web server in background and open its' serving url with your default web browser
-func runLocalPage() {
-	win, err := browser.NewPage(pkger.Dir("/filetree/fe/dist"))
-	if err != nil {
-		log.Fatal(err)
-	}
-	win.Bind("openFolder", openFolder)
-	<-win.Done()
-}
-
-// run a local web server in background and open its' serving url within a native app (which is a chrome process)
-func runNativeApp() {
-	win, err := chrome.NewApp(pkger.Dir("/filetree/fe/dist"), 0, 0, 1024, 768)
-	if err != nil {
-		log.Fatal(err)
-	}
-	win.Bind("openFolder", openFolder)
-	<-win.Done()
 }

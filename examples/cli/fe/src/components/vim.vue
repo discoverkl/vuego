@@ -16,6 +16,7 @@
 
 <script lang="ts">
 import Vue from "vue";
+import _ from "underscore";
 import {
   ref,
   computed,
@@ -79,6 +80,8 @@ export default {
         // automaticLayout: true
       });
 
+      useBodyResize(editor, active);
+
       // bind editor text to state.text
       // (window as any).e = editor;
       // (window as any).m = monaco;
@@ -116,6 +119,18 @@ export default {
     };
   }
 };
+
+function useBodyResize(editor, active) {
+  const lazyLayout = _.debounce(() => {
+    // console.log("editor resize");
+    editor.layout();
+  }, 500);
+  window.document.body.onresize = () => {
+    // console.log("body resize");
+    if (!active.value) return;
+    lazyLayout();
+  };
+}
 
 function useHook(props, state, active, lastLoadedText) {
   const hook = args => {

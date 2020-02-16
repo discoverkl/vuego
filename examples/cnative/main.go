@@ -4,7 +4,7 @@ package main
 import (
 	"log"
 
-	"github.com/discoverkl/vuego/chrome"
+	"github.com/discoverkl/vuego/ui"
 	"github.com/markbates/pkger"
 )
 
@@ -16,11 +16,12 @@ func add(a, b int) int {
 }
 
 func main() {
-	win, err := chrome.NewApp(pkger.Dir("/helloworld/fe/dist"), 200, 200, 800, 600)
-	// win, err := browser.NewPage(pkger.Dir("/helloworld/fe/dist"))
-	if err != nil {
+	app := ui.New(
+		ui.Root(pkger.Dir("/helloworld/fe/dist")),
+		ui.OnlinePort(8000),
+	)
+	app.BindFunc("add", add)
+	if err := app.Run(); err != nil {
 		log.Fatal(err)
 	}
-	win.Bind("add", add)
-	<-win.Done()
 }

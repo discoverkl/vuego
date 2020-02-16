@@ -54,37 +54,17 @@ func main() {
 	name := processName(flag.Args())
 	args := processArgs(flag.Args(), interactive)
 
-	ui.BindFactory("", func(done <-chan bool) interface{} {
-		p := &Proc{Name: name, Args: args, WorkingDir: workingDir, Uid: uid, Gid: gid}
-		go func() {
-			<-done
-			p.Close()
-		}()
+	ops := []ui.Option{
+		ui.Root(pkger.Dir("/cli/fe/dist")),
+		ui.OnlinePort(port),
+	}
 
-		go func() {
-			err := p.run()
-			if err != nil {
-				log.Println(err)
-				p.Close()
-			}
-		}()
+	// ** TLS
+	if tls {
+		ops = append(ops, ui.OnlineTLS("server.crt", "server.key"))	
+	}
 
-		var vim *Vim
-		if len(args) > 0 && args[0] == "bash" {
-			vim = &Vim{proc: p}
-		}
-
-		return map[string]interface{}{
-			"name":   p.name,
-			"write":  p.write,
-			"listen": p.listen,
-			"kill":   p.kill,
-			"pwd":    p.pwd,
-			"load":   vim.load,
-			"save":   vim.save,
-		}
-	})
-
+	// ** Auth
 	if authTable != "" {
 		auth := map[string]string{}
 		raw, err := ioutil.ReadFile(authTable)
@@ -103,28 +83,62 @@ func main() {
 			}
 			auth[user] = pass
 		}
-		ui.Auth = ui.BasicAuth(func(user, pass string) bool {
-			want, ok := auth[user]
-			if !ok {
-				return false
-			}
-			return want == pass
-		})
+		ops = append(ops, ui.OnlineAuth(
+			ui.BasicAuth(func(user, pass string) bool {
+				want, ok := auth[user]
+				if !ok {
+					return false
+				}
+				return want == pass
+			}),
+		))
 	}
 
-	addr := fmt.Sprintf(":%d", port)
-	log.Printf("listen on: %s", addr)
+	app := ui.New(ops...)
 
-	var err error
-	if tls {
-		if redirectPort != 0 {
-			go enforceTLS(redirectPort, port)
+	getmap := func(p *Proc, vim *Vim) map[string]interface{} {
+		return map[string]interface{}{
+			"name":   p.name,
+			"write":  p.write,
+			"listen": p.listen,
+			"kill":   p.kill,
+			"pwd":    p.pwd,
+			"load":   vim.load,
+			"save":   vim.save,
 		}
-		err = ui.ListenAndServeTLS(addr, pkger.Dir("/cli/fe/dist"), "server.crt", "server.key")
-	} else {
-		err = ui.ListenAndServe(addr, pkger.Dir("/cli/fe/dist"))
 	}
-	if err != nil {
+
+	factory := func(c *ui.UIContext) ui.Bindings {
+		p := &Proc{Name: name, Args: args, WorkingDir: workingDir, Uid: uid, Gid: gid}
+		go func() {
+			<-c.Done
+			p.Close()
+		}()
+
+		go func() {
+			err := p.run()
+			if err != nil {
+				log.Println(err)
+				p.Close()
+			}
+		}()
+
+		var vim *Vim
+		if len(args) > 0 && args[0] == "bash" {
+			vim = &Vim{proc: p}
+		}
+
+		return ui.Map(getmap(p, vim))
+	}
+
+	prototype := getmap(&Proc{}, &Vim{})
+	app.Bind(ui.DelayMap(prototype, factory))
+
+	if app.IsOnline() && tls && redirectPort != 0 {
+		go enforceTLS(redirectPort, port)
+	}
+
+	if err := app.Run(); err != nil {
 		log.Fatal(err)
 	}
 }
