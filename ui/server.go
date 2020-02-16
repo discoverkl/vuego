@@ -90,9 +90,10 @@ type FileServer struct {
 	Addr       string
 	ServerPath string
 	Listener   net.Listener
-	root       http.FileSystem // optional for default instance
 	Prefix     string          // path prefix
 	Auth       func(http.HandlerFunc) http.HandlerFunc
+
+	root       http.FileSystem // optional for default instance
 
 	server   *http.Server
 	serveMux *http.ServeMux
@@ -107,6 +108,7 @@ type FileServer struct {
 	once            sync.Once
 	started         chan struct{}
 	localServerDone chan struct{}
+	localServerExitDelay time.Duration	// -1: never exit 0: no delay
 	doneOnce        sync.Once
 }
 
@@ -122,6 +124,7 @@ func NewFileServer(root http.FileSystem) *FileServer {
 		bindings:        []Bindings{},
 		started:         make(chan struct{}),
 		localServerDone: make(chan struct{}),
+		localServerExitDelay: time.Millisecond * 200,
 	}
 	go func() {
 		<-s.started
@@ -132,7 +135,10 @@ func NewFileServer(root http.FileSystem) *FileServer {
 		if dev {
 			log.Println("server done")
 		}
-		s.closeLocalServer()
+		if s.localServerExitDelay > 0 {
+			log.Printf("delay %v and exit after client lost", s.localServerExitDelay)
+			s.closeLocalServer()
+		}
 	}()
 	return s
 }
@@ -297,8 +303,14 @@ func (s *FileServer) serveClientConn(ws *websocket.Conn) {
 		close(done)
 	}()
 	defer func() {
-		<-time.After(time.Millisecond * 200) // support fast page refresh
+		if s.localServerExitDelay > 0 {
+			<-time.After(s.localServerExitDelay) // support fast page refresh
+		}
 		s.wg.Done()
+		if s.localServerExitDelay == 0 {
+			log.Printf("exit after client lost")
+			s.closeLocalServer()
+		}
 	}()
 
 	s.once.Do(func() {

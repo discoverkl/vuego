@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"runtime"
 	"sync"
+	"time"
 )
 
 type NativeWindow interface {
@@ -29,53 +30,24 @@ type browserPage struct {
 	closeOnce sync.Once
 	done      chan struct{}
 	win       NativeWindow
+	mapURL func(net.Listener) string
 }
 
-func NewPage(root http.FileSystem) (Window, error) {
+func NewPage(root http.FileSystem) Window {
 	return NewNativeWindow(root, &browserNativeWindow{}, nil)
 }
 
-func NewPageMapURL(root http.FileSystem, mapURL func(net.Listener) string) (Window, error) {
+func NewPageMapURL(root http.FileSystem, mapURL func(net.Listener) string) Window {
 	return NewNativeWindow(root, &browserNativeWindow{}, mapURL)
 }
 
-func NewNativeWindow(root http.FileSystem, win NativeWindow, mapURL func(net.Listener) string) (Window, error) {
-	// ** local server
-	listener, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		return nil, err
-	}
-	addr := listener.Addr().(*net.TCPAddr)
-	log.Println("using port:", addr.Port)
-
-	server := NewFileServer(root)
-	server.Listener = listener
-	go server.ListenAndServe()
-
-	var url string
-	url = fmt.Sprintf("http://localhost:%d", addr.Port)
-	if mapURL != nil {
-		url = mapURL(listener)
-	}
-
-	// ** brower page
-	if err := win.Open(url); err != nil {
-		return nil, err
-	}
-
-	c := &browserPage{
-		server: server,
+func NewNativeWindow(root http.FileSystem, win NativeWindow, mapURL func(net.Listener) string) Window {
+	return &browserPage{
+		server: NewFileServer(root),
 		done:   make(chan struct{}),
 		win:    win,
+		mapURL: mapURL,
 	}
-
-	// 1/2 server.Done() => done
-	// 2/2 user call Close() => done
-	go func() {
-		<-server.Done()
-		c.Close()
-	}()
-	return c, nil
 }
 
 // func (c *browserPage) Bind(name string, f interface{}) error {
@@ -84,6 +56,42 @@ func NewNativeWindow(root http.FileSystem, win NativeWindow, mapURL func(net.Lis
 
 func (c *browserPage) Bind(b Bindings) error {
 	return c.server.Bind(b)
+}
+
+func (c *browserPage) Open() error {
+	// ** local server
+	listener, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		return err
+	}
+	addr := listener.Addr().(*net.TCPAddr)
+	log.Println("using port:", addr.Port)
+
+	c.server.Listener = listener
+	go c.server.ListenAndServe()
+
+	var url string
+	url = fmt.Sprintf("http://localhost:%d", addr.Port)
+	if c.mapURL != nil {
+		url = c.mapURL(listener)
+	}
+
+	// ** brower page
+	if err := c.win.Open(url); err != nil {
+		return err
+	}
+
+	// 1/2 server.Done() => done
+	// 2/2 user call Close() => done
+	// go func() {
+		<-c.server.Done()
+		c.Close()
+	// }()
+	return nil
+}
+
+func (c *browserPage) SetExitDelay(d time.Duration) {
+	c.server.localServerExitDelay = d
 }
 
 func (c *browserPage) Eval(js string) Value {

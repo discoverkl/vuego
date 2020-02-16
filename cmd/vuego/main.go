@@ -44,6 +44,7 @@ func (c *Counter) Add() int {
 func main() {
 	app := ui.New(
 		ui.OnlinePort(8000),
+		// ui.LocalExitDelay(5 * time.Second),
 		// ui.OnlineAuth(ui.BasicAuth(func(user, pass string) bool {
 		// 	return user == "admin" && pass == "123"
 		// })),

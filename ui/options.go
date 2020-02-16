@@ -31,6 +31,7 @@ type uiConfig struct {
 	OnlineCertFile  string
 	OnlineKeyFile   string
 	LocalMapURL     func(net.Listener) string
+	LocalExitDelay  *time.Duration
 }
 
 func defaultUIConfig() *uiConfig {
@@ -198,6 +199,17 @@ func LocalMapURL(mapURL func(net.Listener) string) Option {
 	}
 }
 
+// LocalExitDelay contorl auto exit behaviour of a local server.
+// By default, when all clients where lost, a local server will wait for a new client and exit if timeout.
+// A local server will exit immediately after any client lost when duration is 0, 
+// and never exit when duration is less than 0.
+func LocalExitDelay(d time.Duration) Option {
+	return func(c *uiConfig) error {
+		c.LocalExitDelay = &d
+		return nil
+	}
+}
+
 //
 // Simple Http FileSystem
 //
@@ -209,7 +221,7 @@ const defaultRoot = htmlRoot(`<!DOCTYPE html>
 	</head>
     <body>
         <h1>Hello Vuego!</h1>
-        <script src="/ui.js?name=window"></script>
+        <script src="/vuego.js?name=window"></script>
     </body>
 </html>
 `)
@@ -227,7 +239,7 @@ const defaultVueHtml = `<!DOCTYPE html>
       <strong>We're sorry but fe doesn't work properly without JavaScript enabled. Please enable it to continue.</strong>
 	</noscript>
 	<script src="https://cdn.jsdelivr.net/npm/vue"></script>
-	<script src="/ui.js?name=window"></script>
+	<script src="/vuego.js?name=window"></script>
 	<script src="/app.js"></script>
 
 	{content}

@@ -92,21 +92,15 @@ func (u *ui) Run() error {
 			ChromeBinary = c.AppChromeBinary
 		}
 		if c.LocalMapURL == nil {
-			win, err = NewApp(c.Root, c.AppX, c.AppY, c.AppWidth, c.AppHeight, c.AppChromeArgs...)
+			win = NewApp(c.Root, c.AppX, c.AppY, c.AppWidth, c.AppHeight, c.AppChromeArgs...)
 		} else {
-			win, err = NewAppMapURL(c.Root, c.AppX, c.AppY, c.AppWidth, c.AppHeight, c.LocalMapURL, c.AppChromeArgs...)
-		}
-		if err != nil {
-			return err
+			win = NewAppMapURL(c.Root, c.AppX, c.AppY, c.AppWidth, c.AppHeight, c.LocalMapURL, c.AppChromeArgs...)
 		}
 	case u.IsPage():
 		if c.LocalMapURL == nil {
-			win, err = NewPage(c.Root)
+			win = NewPage(c.Root)
 		} else {
-			win, err = NewPageMapURL(c.Root, c.LocalMapURL)
-		}
-		if err != nil {
-			return err
+			win = NewPageMapURL(c.Root, c.LocalMapURL)
 		}
 	case u.IsOnline():
 		svr := NewFileServer(c.Root)
@@ -141,8 +135,16 @@ func (u *ui) Run() error {
 		}
 	}
 
-	<-win.Done()
-	return err
+	if c.LocalExitDelay != nil {
+		win.SetExitDelay(*c.LocalExitDelay)
+	}
+
+	return win.Open()
+	// if err = win.Open(); err != nil {
+	// 	return err
+	// }
+	// <-win.Done()
+	// return nil
 }
 
 func (u *ui) Done() <-chan struct{} {

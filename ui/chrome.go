@@ -81,11 +81,11 @@ func (c *chromePage) Close() {
 	c.ensureAppClosed()
 }
 
-func NewChromePage(root http.FileSystem) (Window, error) {
+func NewChromePage(root http.FileSystem) Window {
 	return NewApp(root, 0, 0, -1, -1)
 }
 
-func NewApp(root http.FileSystem, x, y int, width, height int, chromeArgs ...string) (Window, error) {
+func NewApp(root http.FileSystem, x, y int, width, height int, chromeArgs ...string) Window {
 	conf := chromeConfig{x, y, width, height, chromeArgs}
 	c := &chromePage{
 		cmd:        nil,
@@ -95,7 +95,7 @@ func NewApp(root http.FileSystem, x, y int, width, height int, chromeArgs ...str
 	return NewNativeWindow(root, c, nil)
 }
 
-func NewAppMapURL(root http.FileSystem, x, y int, width, height int, mapURL func(net.Listener) string, chromeArgs ...string) (Window, error) {
+func NewAppMapURL(root http.FileSystem, x, y int, width, height int, mapURL func(net.Listener) string, chromeArgs ...string) Window {
 	conf := chromeConfig{x, y, width, height, chromeArgs}
 	c := &chromePage{
 		cmd:        nil,
