@@ -5,7 +5,7 @@ import (
 	"log"
 	"sync"
 
-	"github.com/discoverkl/vuego"
+	"github.com/discoverkl/vuego/ui"
 	"github.com/markbates/pkger"
 )
 
@@ -28,12 +28,12 @@ func (c *counter) Value() int {
 
 func main() {
 	c := &counter{}
-	vuego.Bind("counterAdd", c.Add)
-	vuego.Bind("counterValue", c.Value)
+	ui.Bind("counterAdd", c.Add)
+	ui.Bind("counterValue", c.Value)
 
 	addr := ":8000"
 	log.Printf("listen on: %s", addr)
-	if err := vuego.ListenAndServe(addr, pkger.Dir("/counter/fe/dist")); err != nil {
+	if err := ui.ListenAndServe(addr, pkger.Dir("/counter/fe/dist")); err != nil {
 		log.Fatal(err)
 	}
 }

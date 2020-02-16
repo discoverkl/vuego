@@ -8,7 +8,7 @@ import (
 	"log"
 	"sync"
 
-	"github.com/discoverkl/vuego"
+	"github.com/discoverkl/vuego/ui"
 	"github.com/markbates/pkger"
 )
 
@@ -23,16 +23,16 @@ func init() {
 }
 
 func main() {
-	vuego.Bind("js2go", js2go)
+	ui.Bind("js2go", js2go)
 
 	addr := fmt.Sprintf(":%d", port)
 	log.Printf("listen on: %s", addr)
-	if err := vuego.ListenAndServe(addr, pkger.Dir("/prime/fe/dist")); err != nil {
+	if err := ui.ListenAndServe(addr, pkger.Dir("/prime/fe/dist")); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func js2go(count int, fn *vuego.Function) {
+func js2go(count int, fn *ui.Function) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

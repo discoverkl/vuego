@@ -1,4 +1,4 @@
-package vuego
+package ui
 
 type Window interface {
 	// Load(url string) error

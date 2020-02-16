@@ -9,7 +9,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/discoverkl/vuego"
+	"github.com/discoverkl/vuego/ui"
 	"github.com/discoverkl/vuego/browser"
 	"github.com/discoverkl/vuego/chrome"
 	"github.com/markbates/pkger"
@@ -59,11 +59,11 @@ func main() {
 const www = pkger.Dir("/fe/dist")
 
 func runWebServer() {
-	vuego.Bind("add", add)
+	ui.Bind("add", add)
 
 	addr := ":8000"
 	log.Printf("listen on: %s", addr)
-	if err := vuego.ListenAndServe(addr, www); err != nil {
+	if err := ui.ListenAndServe(addr, www); err != nil {
 		log.Fatal(err)
 	}
 }

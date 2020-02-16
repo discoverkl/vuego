@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/discoverkl/vuego"
+	"github.com/discoverkl/vuego/ui"
 	"github.com/markbates/pkger"
 )
 
@@ -54,7 +54,7 @@ func main() {
 	name := processName(flag.Args())
 	args := processArgs(flag.Args(), interactive)
 
-	vuego.BindFactory("", func(done <-chan bool) interface{} {
+	ui.BindFactory("", func(done <-chan bool) interface{} {
 		p := &Proc{Name: name, Args: args, WorkingDir: workingDir, Uid: uid, Gid: gid}
 		go func() {
 			<-done
@@ -103,7 +103,7 @@ func main() {
 			}
 			auth[user] = pass
 		}
-		vuego.Auth = vuego.BasicAuth(func(user, pass string) bool {
+		ui.Auth = ui.BasicAuth(func(user, pass string) bool {
 			want, ok := auth[user]
 			if !ok {
 				return false
@@ -120,9 +120,9 @@ func main() {
 		if redirectPort != 0 {
 			go enforceTLS(redirectPort, port)
 		}
-		err = vuego.ListenAndServeTLS(addr, pkger.Dir("/cli/fe/dist"), "server.crt", "server.key")
+		err = ui.ListenAndServeTLS(addr, pkger.Dir("/cli/fe/dist"), "server.crt", "server.key")
 	} else {
-		err = vuego.ListenAndServe(addr, pkger.Dir("/cli/fe/dist"))
+		err = ui.ListenAndServe(addr, pkger.Dir("/cli/fe/dist"))
 	}
 	if err != nil {
 		log.Fatal(err)

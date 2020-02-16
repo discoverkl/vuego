@@ -1,4 +1,4 @@
-package vuego
+package ui
 
 import (
 	"fmt"
@@ -31,7 +31,7 @@ type ui struct {
 	bindings  []Bindings
 }
 
-func NewUI(ops ...Option) UI {
+func New(ops ...Option) UI {
 	var err error
 	var confError error
 

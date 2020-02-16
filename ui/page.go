@@ -1,4 +1,4 @@
-package vuego
+package ui
 
 import (
 	"context"
@@ -71,7 +71,7 @@ func (c *page) bindMap(items map[string]BindingFunc) error {
 				isContext := false
 				if arg.Type() == contextType {
 					isContext = true
-					arg = reflect.New(reflect.TypeOf((*Context)(nil))) // rewrite context.Context interface to vuego.Context type
+					arg = reflect.New(reflect.TypeOf((*Context)(nil))) // rewrite context.Context interface to ui.Context type
 				}
 
 				if err := json.Unmarshal(raw[i], arg.Interface()); err != nil {

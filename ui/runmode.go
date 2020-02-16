@@ -1,4 +1,4 @@
-package vuego
+package ui
 
 const (
 	modApp    = "app"

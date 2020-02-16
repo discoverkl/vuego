@@ -1,4 +1,4 @@
-package vuego
+package ui
 
 import (
 	"bytes"
@@ -209,7 +209,7 @@ const defaultRoot = htmlRoot(`<!DOCTYPE html>
 	</head>
     <body>
         <h1>Hello Vuego!</h1>
-        <script src="/vuego.js?name=window"></script>
+        <script src="/ui.js?name=window"></script>
     </body>
 </html>
 `)
@@ -227,7 +227,7 @@ const defaultVueHtml = `<!DOCTYPE html>
       <strong>We're sorry but fe doesn't work properly without JavaScript enabled. Please enable it to continue.</strong>
 	</noscript>
 	<script src="https://cdn.jsdelivr.net/npm/vue"></script>
-	<script src="/vuego.js?name=window"></script>
+	<script src="/ui.js?name=window"></script>
 	<script src="/app.js"></script>
 
 	{content}

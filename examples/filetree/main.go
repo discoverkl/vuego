@@ -11,7 +11,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/discoverkl/vuego"
+	"github.com/discoverkl/vuego/ui"
 	"github.com/discoverkl/vuego/browser"
 	"github.com/discoverkl/vuego/chrome"
 	"github.com/markbates/pkger"
@@ -91,11 +91,11 @@ func init() {
 
 // run a normal web server
 func runWebServer() {
-	vuego.Bind("openFolder", openFolder)
+	ui.Bind("openFolder", openFolder)
 
 	addr := fmt.Sprintf(":%d", port)
 	log.Printf("listen on: %s", addr)
-	if err := vuego.ListenAndServe(addr, pkger.Dir("/filetree/fe/dist")); err != nil {
+	if err := ui.ListenAndServe(addr, pkger.Dir("/filetree/fe/dist")); err != nil {
 		log.Fatal(err)
 	}
 }

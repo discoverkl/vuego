@@ -12,7 +12,7 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/discoverkl/vuego"
+	"github.com/discoverkl/vuego/ui"
 )
 
 type WriterFunc func(p []byte) (n int, err error)
@@ -90,7 +90,7 @@ func (p *Proc) write(s string) error {
 	return err
 }
 
-func (p *Proc) listen(writer *vuego.Function) error {
+func (p *Proc) listen(writer *ui.Function) error {
 	if p.cmd == nil {
 		return fmt.Errorf("invalid operation: subprocess is not ready")
 	}

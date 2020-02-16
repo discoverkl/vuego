@@ -1,4 +1,4 @@
-package vuego
+package ui
 
 import (
 	"encoding/json"
