@@ -6,7 +6,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -28,63 +27,7 @@ type UIContext struct {
 
 type ObjectFactory func(*UIContext) interface{}
 
-// var Prefix string
-
-// var Auth func(http.HandlerFunc) http.HandlerFunc
-
-// // Bind one api for javascript.
-// func Bind(name string, f interface{}) {
-// 	err := DefaultServer.Bind(name, f)
-// 	if err != nil {
-// 		panic(err)
-// 	}
-// }
-
-// // BindObject bind all public members for javascript.
-// // If name is empty, bind directly to the api object.
-// func BindObject(name string, i interface{}) {
-// 	err := DefaultServer.BindObject(name, i)
-// 	if err != nil {
-// 		panic(err)
-// 	}
-// }
-
-// // BindFactory call factory and bind its' return value for each client session.
-// func BindFactory(name string, factory ObjectFactory) {
-// 	err := DefaultServer.BindFactory(name, factory)
-// 	if err != nil {
-// 		panic(err)
-// 	}
-// }
-
-// // Done chan is closed when some client had connected and all clients are gone now.
-// func Done() <-chan struct{} {
-// 	return DefaultServer.Done()
-// }
-
-// func ListenAndServe(addr string, root http.FileSystem) error {
-// 	DefaultServer.Prefix = Prefix
-// 	DefaultServer.Auth = Auth
-// 	DefaultServer.root = root
-// 	DefaultServer.Addr = addr
-// 	return DefaultServer.ListenAndServe()
-// }
-
-// func ListenAndServeTLS(addr string, root http.FileSystem, certFile, keyFile string) error {
-// 	DefaultServer.Prefix = Prefix
-// 	DefaultServer.Auth = Auth
-// 	DefaultServer.root = root
-// 	DefaultServer.Addr = addr
-// 	return DefaultServer.ListenAndServeTLS(certFile, keyFile)
-// }
-
-// var DefaultServer *FileServer
 var defaultServerPath = "/vuego"
-var once sync.Once
-
-// func init() {
-// 	DefaultServer = NewFileServer(nil)
-// }
 
 type FileServer struct {
 	Addr       string
@@ -98,8 +41,6 @@ type FileServer struct {
 	server   *http.Server
 	serveMux *http.ServeMux
 
-	// binding        map[string]interface{}
-	// bindingFactory map[string]ObjectFactory
 	bindingNames map[string]bool // for js placeholder
 	bindings     []Bindings
 
@@ -118,8 +59,6 @@ func NewFileServer(root http.FileSystem) *FileServer {
 		root:     root,
 		serveMux: serveMux,
 		server:   &http.Server{Handler: serveMux},
-		// binding:         map[string]interface{}{},
-		// bindingFactory:  map[string]ObjectFactory{},
 		bindingNames:    map[string]bool{},
 		bindings:        []Bindings{},
 		started:         make(chan struct{}),
@@ -211,10 +150,9 @@ func (s *FileServer) handleVuego(prefix string, tls bool) {
 	s.serveMux.Handle(prefix+getScriptPath(serverPath), http.StripPrefix(prefix, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Add("Content-Type", "text/javascript")
 		jsQuery := fmt.Sprintf("?%s", req.URL.RawQuery)
-		// bytes, _ := json.Marshal(jsQuery)
 
 		names := []string{}
-		for name, _ := range s.bindingNames {
+		for name := range s.bindingNames {
 			names = append(names, name)
 		}
 
@@ -224,8 +162,6 @@ func (s *FileServer) handleVuego(prefix string, tls bool) {
 			Search:   jsQuery,
 			Bindings: names,
 		})
-		// clientScript = mapScript(clientScript, `"/vuego"`, fmt.Sprintf(`"%s"`, prefix + serverPath))
-		// clientScript = mapScript(clientScript, "let search = undefined", fmt.Sprintf("let search = %s", string(bytes)))
 		fmt.Fprint(w, clientScript)
 	})))
 }
@@ -250,49 +186,6 @@ func (s *FileServer) collectBindNames(b Bindings) error {
 		s.bindingNames[name] = true
 	}
 	return nil
-}
-
-// func (s *FileServer) Bind(name string, f interface{}) error {
-// 	if err := s.collectBindNames(name, f); err != nil {
-// 		return err
-// 	}
-// 	s.binding[name] = f
-// 	return nil
-// }
-
-// func (s *FileServer) BindFactory(name string, factory ObjectFactory) error {
-// 	if factory == nil {
-// 		return fmt.Errorf("argument factory is required")
-// 	}
-// 	// preflight check
-// 	done := make(chan bool)
-// 	defer close(done)
-// 	f := factory(&FactoryContext{Request: nil, Done: done})
-// 	if err := s.collectBindNames(name, f); err != nil {
-// 		return err
-// 	}
-// 	s.bindingFactory[name] = factory
-// 	return nil
-// }
-
-// func (s *FileServer) collectBindNames(name string, f interface{}) error {
-// 	// preflight check
-// 	hold, err := getBindings(name, f)
-// 	if err != nil {
-// 		return fmt.Errorf("invalid binding: %w", err)
-// 	}
-// 	for subName, target := range hold {
-// 		if err = checkBindFunc(subName, target); err != nil {
-// 			return fmt.Errorf("invalid binding: %w", err)
-// 		}
-// 		s.bindingNames[subName] = true
-// 	}
-// 	return nil
-// }
-
-type member struct {
-	Name  string
-	Value reflect.Value
 }
 
 // ready(0) -> started(1+) -> done(0)
@@ -334,13 +227,6 @@ func (s *FileServer) serveClientConn(ws *websocket.Conn) {
 			binds[name] = f
 		}
 	}
-
-	// for name, target := range s.binding {
-	// 	collect(name, target)
-	// }
-	// for name, factory := range s.bindingFactory {
-	// 	collect(name, factory(&UIContext{Request: ws.Request(), Done: done}))
-	// }
 
 	c := &UIContext{Request: ws.Request(), Done: done}
 	for _, b := range s.bindings {

@@ -129,6 +129,11 @@ func (m *mapBinding) Error() error {
 	return m.err
 }
 
+type member struct {
+	Name  string
+	Value reflect.Value
+}
+
 func getBindings(name string, i interface{}) (map[string]BindingFunc, error) {
 	if i == nil {
 		return nil, fmt.Errorf("getBindings on nil")

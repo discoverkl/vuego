@@ -50,10 +50,6 @@ func NewNativeWindow(root http.FileSystem, win NativeWindow, mapURL func(net.Lis
 	}
 }
 
-// func (c *browserPage) Bind(name string, f interface{}) error {
-// 	return c.server.Bind(name, f)
-// }
-
 func (c *browserPage) Bind(b Bindings) error {
 	return c.server.Bind(b)
 }
@@ -83,10 +79,8 @@ func (c *browserPage) Open() error {
 
 	// 1/2 server.Done() => done
 	// 2/2 user call Close() => done
-	// go func() {
-		<-c.server.Done()
-		c.Close()
-	// }()
+	<-c.server.Done()
+	c.Close()
 	return nil
 }
 

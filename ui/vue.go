@@ -11,12 +11,11 @@ import (
 
 type UI interface {
 	Run() error
-	// Done() <-chan struct{}
-	Bindable
+	Binder
 	RunMode
 }
 
-type Bindable interface {
+type Binder interface {
 	Bind(b Bindings)
 	BindPrefix(name string, b Bindings)
 	BindFunc(name string, fn interface{})
@@ -140,11 +139,6 @@ func (u *ui) Run() error {
 	}
 
 	return win.Open()
-	// if err = win.Open(); err != nil {
-	// 	return err
-	// }
-	// <-win.Done()
-	// return nil
 }
 
 func (u *ui) Done() <-chan struct{} {

@@ -15,11 +15,6 @@ type jsOption struct {
 	Bindings      []string `json:"bindings"`
 }
 
-func init() {
-	// script = mapScript(script, "let dev = true", "let dev = false")
-	// script = mapScript(script, "Vuego()", fmt.Sprintf("%s()", ReadyFuncName))
-}
-
 func injectOptions(op *jsOption) string {
 	if op == nil {
 		op = &jsOption{}
