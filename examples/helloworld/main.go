@@ -10,25 +10,27 @@ import (
 	"os"
 
 	"github.com/discoverkl/vuego/ui"
-	"github.com/discoverkl/vuego/browser"
-	"github.com/discoverkl/vuego/chrome"
 	"github.com/markbates/pkger"
 )
 
-const promptText = `
-*** Commands ***
-
-1: WebServer - run a normal web server
-2: LocalPage - run a local web server in background and open its' serving url with your default web browser
-3: NativeApp - run a local web server in background and open its' serving url within a native app (which is a chrome process)
-
-Please enter (1-3)? `
+// site root (http.FileSystem)
+const www = pkger.Dir("/fe/dist")
 
 func add(a, b int) int {
 	return a + b
 }
 
 func main() {
+	app := ui.New(
+		ui.Mode(promptRunMod()),
+		ui.Root(www),
+		ui.OnlineAddr(":8000"),
+	)	
+	app.BindFunc("add", add)
+	app.Run()
+}
+
+func promptRunMod() string {
 	for {
 		fmt.Print(promptText)
 		ch, _, err := bufio.NewReader(os.Stdin).ReadRune()
@@ -42,46 +44,23 @@ func main() {
 
 		switch ch {
 		case '1':
-			runWebServer()
+			return "page"
 		case '2':
-			runLocalPage()
+			return "app"
 		case '3':
-			runNativeApp()
+			return "online"
 		case 'q':
 		default:
-			continue
+			os.Exit(0)
 		}
-		return
 	}
 }
 
-// site root (http.FileSystem)
-const www = pkger.Dir("/fe/dist")
+const promptText = `
+*** Commands ***
 
-func runWebServer() {
-	ui.Bind("add", add)
+1: LocalPage - start a local web server, open its' serving url with your default web browser
+2: LocalApp - start a local web server, open its' serving url within a native app (which is a chrome process)
+3: Online   - run a online web server
 
-	addr := ":8000"
-	log.Printf("listen on: %s", addr)
-	if err := ui.ListenAndServe(addr, www); err != nil {
-		log.Fatal(err)
-	}
-}
-
-func runLocalPage() {
-	win, err := browser.NewPage(www)
-	if err != nil {
-		log.Fatal(err)
-	}
-	win.Bind("add", add)
-	<-win.Done()
-}
-
-func runNativeApp() {
-	win, err := chrome.NewApp(pkger.Dir(www), 200, 200, 800, 600)
-	if err != nil {
-		log.Fatal(err)
-	}
-	win.Bind("add", add)
-	<-win.Done()
-}
+Please enter (1-3)? `

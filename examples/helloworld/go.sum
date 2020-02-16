@@ -1,10 +1,11 @@
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/discoverkl/vuego v0.0.0-20200211185348-2422ea46a4fe h1:u8qcZDNfY6duuGOZX7ljM7pBuET6roSGhJ+2dUGgZfA=
-github.com/discoverkl/vuego v0.0.0-20200211185348-2422ea46a4fe/go.mod h1:PReZjMSShgl8VsMJ68GJsFlK+N1GkHSLJFCNL4WKN5c=
+github.com/discoverkl/vuego v0.0.0-20200216092322-3806e16bfbb1 h1:TjhTi/aOn1FWIvFZZz22Z7zt9bDhFfRQnReExVf9jzg=
+github.com/discoverkl/vuego v0.0.0-20200216092322-3806e16bfbb1/go.mod h1:a60PRs7o/0WM1IOCqPToyfVQQGZ6+9kVLlYBsnnJlvA=
 github.com/gobuffalo/here v0.6.0 h1:hYrd0a6gDmWxBM4TnrGw8mQg24iSVoIkHEk7FodQcBI=
 github.com/gobuffalo/here v0.6.0/go.mod h1:wAG085dHOYqUpf+Ap+WOdrPTp5IYcDAs/x7PLa8Y5fM=
+github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510/go.mod h1:pupxD2MaaD3pAXIBCelhxNneeOaAeabZDe5s4K6zSpQ=
 github.com/kr/pretty v0.1.0 h1:L/CwN0zerZDmRFUapSPitk6f+Q3+0za1rQkzVuMiMFI=
 github.com/kr/pretty v0.1.0/go.mod h1:dAy3ld7l9f0ibDNOQOHHMYYIIbhfbHSm3C4ZsoJORNo=
 github.com/kr/pty v1.1.1/go.mod h1:pFQYn66WHrOpPYNljwOMqo10TkYh1fy3cYio2l3bCsQ=
