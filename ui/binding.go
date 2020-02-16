@@ -60,7 +60,7 @@ func Delay(names []string, factory func(*UIContext) Bindings) Bindings {
 	return &mapBinding{names: names, factory: factory}
 }
 
-func DelayMap(prototype interface{}, factory func(*UIContext) Bindings) Bindings {
+func DelayMap(prototype map[string]interface{}, factory func(*UIContext) Bindings) Bindings {
 	binds := Map(prototype)
 	if binds.Error() != nil {
 		return binds
