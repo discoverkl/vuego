@@ -343,7 +343,7 @@ var script = `var __awaiter = (this && this.__awaiter) || function (thisArg, _ar
         let host = window.location.host;
         let ws = new WebSocket((options.tls ? "wss://" : "ws://") + host + options.prefix + "/vuego");
         let vuego = new Vuego(ws);
-        let api = ui.getapi();
+        let api = vuego.getapi();
         let exportAPI = () => {
             let name = getparam("name", options.search);
             let win = window;
@@ -352,7 +352,7 @@ var script = `var __awaiter = (this && this.__awaiter) || function (thisArg, _ar
             else if (name)
                 win[name] = api;
         };
-        ui.beforeReady = exportAPI;
+        vuego.beforeReady = exportAPI;
         exportAPI();
         return api;
     }
