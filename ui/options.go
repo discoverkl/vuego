@@ -30,6 +30,8 @@ type uiConfig struct {
 	OnlineAuth      func(http.HandlerFunc) http.HandlerFunc
 	OnlineCertFile  string
 	OnlineKeyFile   string
+	OnlineAttach	HTTPServer
+	OnlineAttachTLS	bool
 	LocalMapURL     func(net.Listener) string
 	LocalExitDelay  *time.Duration
 }
@@ -188,6 +190,14 @@ func OnlineTLS(certFile, keyFile string) Option {
 
 }
 
+func OnlineAttach(existingServer HTTPServer, tls bool) Option {
+	return func(c *uiConfig) error {
+		c.OnlineAttach = existingServer
+		c.OnlineAttachTLS = tls
+		return nil
+	}
+}
+
 //
 // Local Options
 //
@@ -201,7 +211,7 @@ func LocalMapURL(mapURL func(net.Listener) string) Option {
 
 // LocalExitDelay contorl auto exit behaviour of a local server.
 // By default, when all clients where lost, a local server will wait for a new client and exit if timeout.
-// A local server will exit immediately after any client lost when duration is 0, 
+// A local server will exit immediately after any client lost when duration is 0,
 // and never exit when duration is less than 0.
 func LocalExitDelay(d time.Duration) Option {
 	return func(c *uiConfig) error {

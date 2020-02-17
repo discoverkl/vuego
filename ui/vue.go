@@ -11,16 +11,21 @@ import (
 
 type UI interface {
 	Run() error
-	Binder
+	Bindable
 	RunMode
+	Add(name string, child UI)		// add sub UI
 }
 
-type Binder interface {
+type Bindable interface {
 	Bind(b Bindings)
 	BindPrefix(name string, b Bindings)
 	BindFunc(name string, fn interface{})
 	BindObject(obj interface{})
 	BindMap(m map[string]interface{})
+	GetBindings() []Bindings
+}
+type Binder interface {
+	Bind(b Bindings) error
 }
 
 type ui struct {
@@ -28,6 +33,7 @@ type ui struct {
 	runMode
 	confError error
 	bindings  []Bindings
+	children map[string]UI
 }
 
 func New(ops ...Option) UI {
@@ -42,7 +48,7 @@ func New(ops ...Option) UI {
 		}
 	}
 
-	app := &ui{conf: conf, confError: confError}
+	app := &ui{conf: conf, confError: confError, children: map[string]UI{}}
 	app.useRunMode()
 	app.useSpecialEnvSetting()
 	return app
@@ -68,6 +74,14 @@ func (u *ui) BindMap(m map[string]interface{}) {
 	u.Bind(Map(m))
 }
 
+func (u *ui) GetBindings() []Bindings {
+	ret := make([]Bindings, len(u.bindings))
+	for i := 0; i < len(u.bindings); i++ {
+		ret[i] = u.bindings[i]
+	}
+	return ret
+}
+
 func (u *ui) Run() error {
 	c := u.conf
 
@@ -83,8 +97,10 @@ func (u *ui) Run() error {
 	}
 
 	var win Window
+	var svr *FileServer
 	var err error
 
+	// ** create window or server
 	switch true {
 	case u.IsApp():
 		if c.AppChromeBinary != "" {
@@ -95,50 +111,75 @@ func (u *ui) Run() error {
 		} else {
 			win = NewAppMapURL(c.Root, c.AppX, c.AppY, c.AppWidth, c.AppHeight, c.LocalMapURL, c.AppChromeArgs...)
 		}
+		svr = win.Server()
 	case u.IsPage():
 		if c.LocalMapURL == nil {
 			win = NewPage(c.Root)
 		} else {
 			win = NewPageMapURL(c.Root, c.LocalMapURL)
 		}
+		svr = win.Server()
 	case u.IsOnline():
-		svr := NewFileServer(c.Root)
+		svr = NewFileServer(c.Root)
 		svr.Addr = c.OnlineAddr
 		svr.Listener = c.OnlineListener
 		svr.Prefix = c.OnlinePrefix
 		svr.Auth = c.OnlineAuth
+	default:
+		return fmt.Errorf("unsupported mode: %v", u)
+	}
 
-		for _, b := range u.bindings {
+	// ** Bindings
+	for _, b := range u.bindings {
+		err = svr.Bind(b)
+		if err != nil {
+			return err
+		}
+	}
+	for name, childUI := range u.children {
+		child, ok := childUI.(*ui)
+		if !ok {
+			continue
+		}
+		svr.handlePage(name, child.conf.Root)
+		for _, b := range child.bindings {
 			err = svr.Bind(b)
 			if err != nil {
 				return err
 			}
 		}
+	}
 
+	// ** Run
+	switch true {
+	case u.IsLocal():
+		if c.LocalExitDelay != nil {
+			win.SetExitDelay(*c.LocalExitDelay)
+		}
+		return win.Open()
+	case u.IsOnline():
+		if c.OnlineAttach != nil {
+			if c.OnlineAttachTLS {
+				svr.ServeExistingServerTLS(c.OnlineAttach)
+			} else {
+				svr.ServeExistingServer(c.OnlineAttach)
+			}
+			return nil
+		}
 		if !c.Quiet {
 			log.Printf("listen on: %s", svr.Addr)
 		}
-
 		if c.OnlineCertFile != "" && c.OnlineKeyFile != "" {
 			return svr.ListenAndServeTLS(c.OnlineCertFile, c.OnlineKeyFile)
 		}
 		return svr.ListenAndServe()
 	default:
-		return fmt.Errorf("unsupported mode: %v", u)
+		panic("not here")
 	}
+}
 
-	for _, b := range u.bindings {
-		err = win.Bind(b)
-		if err != nil {
-			return err
-		}
-	}
-
-	if c.LocalExitDelay != nil {
-		win.SetExitDelay(*c.LocalExitDelay)
-	}
-
-	return win.Open()
+func (u *ui) Add(name string, child UI) {
+	u.children[name] = child	
 }
 
 func (u *ui) Done() <-chan struct{} {
@@ -168,7 +209,11 @@ func (u *ui) useRunMode() {
 	case "page":
 	case "online":
 	default:
-		mode = "page"
+		if u.conf.OnlineAttach != nil {
+			mode = "online"
+		} else {
+			mode = "page"
+		}
 	}
 	u.runMode = runMode(mode)
 }

@@ -20,6 +20,16 @@ var dev = one.InDevMode("vuego")
 const ReadyFuncName = "Vuego"
 const ContextBindingName = "context"
 
+type HTTPServer interface {
+	Handle(pattern string, handler http.Handler)
+}
+
+type HTTPServerFunc func(pattern string, handler http.Handler)
+
+func (f HTTPServerFunc) Handle(pattern string, handler http.Handler) {
+	f(pattern, handler)
+}
+
 type UIContext struct {
 	Request *http.Request
 	Done    <-chan bool
@@ -33,36 +43,42 @@ type FileServer struct {
 	Addr       string
 	ServerPath string
 	Listener   net.Listener
-	Prefix     string          // path prefix
+	Prefix     string // path prefix
 	Auth       func(http.HandlerFunc) http.HandlerFunc
 
-	root       http.FileSystem // optional for default instance
+	root http.FileSystem // optional for default instance
 
 	server   *http.Server
 	serveMux *http.ServeMux
+	es []muxEntry
 
 	bindingNames map[string]bool // for js placeholder
 	bindings     []Bindings
 
 	// local server done
-	wg              sync.WaitGroup
-	once            sync.Once
-	started         chan struct{}
-	localServerDone chan struct{}
-	localServerExitDelay time.Duration	// -1: never exit 0: no delay
-	doneOnce        sync.Once
+	wg                   sync.WaitGroup
+	once                 sync.Once
+	started              chan struct{}
+	localServerDone      chan struct{}
+	localServerExitDelay time.Duration // -1: never exit 0: no delay
+	doneOnce             sync.Once
+}
+type muxEntry struct {
+	h       http.Handler
+	pattern string
 }
 
 func NewFileServer(root http.FileSystem) *FileServer {
 	serveMux := http.NewServeMux()
 	s := &FileServer{
-		root:     root,
-		serveMux: serveMux,
-		server:   &http.Server{Handler: serveMux},
-		bindingNames:    map[string]bool{},
-		bindings:        []Bindings{},
-		started:         make(chan struct{}),
-		localServerDone: make(chan struct{}),
+		root:                 root,
+		serveMux:             serveMux,
+		es:					  []muxEntry{},
+		server:               &http.Server{Handler: serveMux},
+		bindingNames:         map[string]bool{},
+		bindings:             []Bindings{},
+		started:              make(chan struct{}),
+		localServerDone:      make(chan struct{}),
 		localServerExitDelay: time.Millisecond * 200,
 	}
 	go func() {
@@ -75,15 +91,23 @@ func NewFileServer(root http.FileSystem) *FileServer {
 			log.Println("server done")
 		}
 		if s.localServerExitDelay > 0 {
-			log.Printf("delay %v and exit after client lost", s.localServerExitDelay)
+			log.Printf("delay %v and local done after client lost", s.localServerExitDelay)
 			s.closeLocalServer()
 		}
 	}()
 	return s
 }
 
+func (s *FileServer) ServeExistingServer(server HTTPServer) {
+	s.installHandlers(server, false)
+}
+
+func (s *FileServer) ServeExistingServerTLS(server HTTPServer) {
+	s.installHandlers(server, true)
+}
+
 func (s *FileServer) ListenAndServe() error {
-	s.installHandlers(false)
+	s.installHandlers(nil, false)
 	if s.Listener != nil {
 		return s.server.Serve(s.Listener)
 	}
@@ -91,24 +115,49 @@ func (s *FileServer) ListenAndServe() error {
 }
 
 func (s *FileServer) ListenAndServeTLS(certFile, keyFile string) error {
-	s.installHandlers(true)
+	s.installHandlers(nil, true)
 	if s.Listener != nil {
 		return s.server.ServeTLS(s.Listener, certFile, keyFile)
 	}
 	return s.server.ListenAndServeTLS(certFile, keyFile)
 }
 
-func (s *FileServer) installHandlers(tls bool) {
+func (s *FileServer) handlePage(path string, root http.FileSystem) {
+	path = strings.Join([]string{s.getPrefix(), path}, "/")	
+	path = strings.TrimRight(path, "/")
+	// s.serveMux.Handle(path+"/", http.StripPrefix(path, http.FileServer(root)))
+	s.es = append(s.es, muxEntry{pattern: path+"/", h: http.StripPrefix(path, http.FileServer(root))})
+}
+
+func (s *FileServer) getPrefix() string {
 	prefix := s.Prefix
 	if prefix != "" && prefix[0] != '/' {
 		panic(fmt.Sprintf("Prefix must start with '/', got: %s", prefix))
 	}
-	prefix = strings.TrimRight(prefix, "/")
+	return strings.TrimRight(prefix, "/")
+}
+
+func (s *FileServer) installHandlers(realServer HTTPServer, tls bool) {
+	prefix := s.getPrefix()
 	if dev {
 		log.Printf("with prefix: %s", prefix)
 	}
 	s.handleVuego(prefix, tls)
-	s.serveMux.Handle(prefix+"/", http.StripPrefix(prefix, http.FileServer(s.root)))
+	s.handlePage("", s.root)
+
+	attachMode := (realServer != nil)
+	if realServer == nil {
+		realServer = s.serveMux
+	}
+
+	for _, e := range s.es {
+		realServer.Handle(e.pattern, e.h)
+	}
+
+	// ignore Addr and Auth for attacth mode
+	if attachMode {
+		return
+	}
 
 	addr := s.Addr
 	if addr == "" {
@@ -146,8 +195,10 @@ func (s *FileServer) handleVuego(prefix string, tls bool) {
 		panic("serverPath must start with '/'")
 	}
 
-	s.serveMux.Handle(prefix+serverPath, http.StripPrefix(prefix, websocket.Handler(s.serveClientConn)))
-	s.serveMux.Handle(prefix+getScriptPath(serverPath), http.StripPrefix(prefix, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	// s.serveMux.Handle(prefix+serverPath, http.StripPrefix(prefix, websocket.Handler(s.serveClientConn)))
+	// s.serveMux.Handle(prefix+getScriptPath(serverPath), http.StripPrefix(prefix, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	s.es = append(s.es, muxEntry{pattern: prefix+serverPath, h:http.StripPrefix(prefix, websocket.Handler(s.serveClientConn)) })
+	s.es = append(s.es, muxEntry{pattern: prefix+getScriptPath(serverPath), h: http.StripPrefix(prefix, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Add("Content-Type", "text/javascript")
 		jsQuery := fmt.Sprintf("?%s", req.URL.RawQuery)
 
@@ -163,7 +214,7 @@ func (s *FileServer) handleVuego(prefix string, tls bool) {
 			Bindings: names,
 		})
 		fmt.Fprint(w, clientScript)
-	})))
+	}))})
 }
 
 func (s *FileServer) Done() <-chan struct{} {
@@ -201,7 +252,7 @@ func (s *FileServer) serveClientConn(ws *websocket.Conn) {
 		}
 		s.wg.Done()
 		if s.localServerExitDelay == 0 {
-			log.Printf("exit after client lost")
+			log.Printf("local done after client lost")
 			s.closeLocalServer()
 		}
 	}()

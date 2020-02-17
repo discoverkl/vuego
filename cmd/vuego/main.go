@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"net/http"
 	"time"
 
 	"github.com/discoverkl/vuego/ui"
@@ -40,10 +42,11 @@ func (c *Counter) Add() int {
 	return c.sum
 }
 
-
 func main() {
 	app := ui.New(
 		ui.OnlinePort(8000),
+		ui.OnlinePrefix("/me"),
+		ui.OnlineAttach(ui.HTTPServerFunc(http.Handle), false),
 		// ui.LocalExitDelay(5 * time.Second),
 		// ui.OnlineAuth(ui.BasicAuth(func(user, pass string) bool {
 		// 	return user == "admin" && pass == "123"
@@ -65,8 +68,20 @@ func main() {
 	// 	return ui.Object(newCounter())
 	// }))
 
+	// app2 := ui.New(ui.OnlinePort(8001))
+	// app2.BindFunc("getEnv", os.Getenv)
+	// // go app2.Run()
+	// app.Add("hi", app2)
+
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, "This is a normal Go server")
+	})
 
 	if err := app.Run(); err != nil {
+		log.Fatal(err)
+	}
+
+	if err := http.ListenAndServe(":8000", nil); err != nil {
 		log.Fatal(err)
 	}
 }

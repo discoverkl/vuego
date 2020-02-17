@@ -30,7 +30,7 @@ type browserPage struct {
 	closeOnce sync.Once
 	done      chan struct{}
 	win       NativeWindow
-	mapURL func(net.Listener) string
+	mapURL    func(net.Listener) string
 }
 
 func NewPage(root http.FileSystem) Window {
@@ -52,6 +52,10 @@ func NewNativeWindow(root http.FileSystem, win NativeWindow, mapURL func(net.Lis
 
 func (c *browserPage) Bind(b Bindings) error {
 	return c.server.Bind(b)
+}
+
+func (c *browserPage) Server() *FileServer {
+	return c.server
 }
 
 func (c *browserPage) Open() error {
