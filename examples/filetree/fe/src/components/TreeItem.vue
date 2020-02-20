@@ -62,7 +62,7 @@ export default {
             );
           } catch (ex) {
             Vue.set(props.item, "children", null);
-            console.error("openFolder failed:", ex);
+            console.error(`openFolder failed: ${ex}`);
           }
         }
 
