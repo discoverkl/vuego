@@ -166,7 +166,7 @@ func (u *ui) Run() error {
 			}
 			return nil
 		}
-		if !c.Quiet {
+		if !c.Quiet && svr.Addr != "" {
 			log.Printf("listen on: %s", svr.Addr)
 		}
 		if c.OnlineCertFile != "" && c.OnlineKeyFile != "" {
@@ -219,6 +219,16 @@ func (u *ui) useRunMode() {
 }
 
 func (u *ui) useSpecialEnvSetting() {
+	// online port
+	portEnv := os.Getenv("ONLINE_PORT")
+	if portEnv != "" {
+		override := strings.HasSuffix(portEnv, "!")
+		portEnv = strings.TrimRight(portEnv, "!")
+		if u.conf.OnlineAddr == "" || override {
+			u.conf.OnlineAddr = fmt.Sprintf(":%s", portEnv)
+		}
+	}
+
 	// chrome args
 	chromeEnv := os.Getenv("APP_CHROME_ARGS")
 	if chromeEnv != "" {

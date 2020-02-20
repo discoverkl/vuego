@@ -43,7 +43,6 @@ func defaultUIConfig() *uiConfig {
 		AppY:       200,
 		AppWidth:   1024,
 		AppHeight:  768,
-		OnlineAddr: ":80",
 	}
 }
 

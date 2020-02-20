@@ -1,0 +1,3 @@
+find fe/dist -name "*.map" | xargs rm -f
+go run ../cmd/pack fe/dist pkged.go code
+

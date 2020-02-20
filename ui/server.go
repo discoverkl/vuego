@@ -91,7 +91,7 @@ func NewFileServer(root http.FileSystem) *FileServer {
 			log.Println("server done")
 		}
 		if s.localServerExitDelay > 0 {
-			log.Printf("delay %v and local done after client lost", s.localServerExitDelay)
+			// log.Printf("delay %v and local done after client lost", s.localServerExitDelay)
 			s.closeLocalServer()
 		}
 	}()
@@ -252,7 +252,7 @@ func (s *FileServer) serveClientConn(ws *websocket.Conn) {
 		}
 		s.wg.Done()
 		if s.localServerExitDelay == 0 {
-			log.Printf("local done after client lost")
+			// log.Printf("local done after client lost")
 			s.closeLocalServer()
 		}
 	}()
