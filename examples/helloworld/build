@@ -1,0 +1,2 @@
+go generate         # pack 'fe/dist' -> 'pkged.go'
+go install .
