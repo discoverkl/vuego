@@ -1,3 +1,10 @@
 # Vuego
 
-Call remote go methods directly from javascript through WebSocket.
+Call remote Go methods directly from Javascript through WebSocket.
+
+See examples folder.
+
+# Helloword
+
+`go run github.com/discoverkl/vuego/examples/helloworld`
+
