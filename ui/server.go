@@ -39,18 +39,23 @@ type ObjectFactory func(*UIContext) interface{}
 
 var defaultServerPath = "/vuego"
 
+type ClientOptions struct {
+	BlurOnClose bool
+}
+
 type FileServer struct {
-	Addr       string
-	ServerPath string
-	Listener   net.Listener
-	Prefix     string // path prefix
-	Auth       func(http.HandlerFunc) http.HandlerFunc
+	Addr          string
+	ServerPath    string
+	Listener      net.Listener
+	Prefix        string // path prefix
+	Auth          func(http.HandlerFunc) http.HandlerFunc
+	ClientOptions *ClientOptions
 
 	root http.FileSystem // optional for default instance
 
 	server   *http.Server
 	serveMux *http.ServeMux
-	es []muxEntry
+	es       []muxEntry
 
 	bindingNames map[string]bool // for js placeholder
 	bindings     []Bindings
@@ -73,7 +78,7 @@ func NewFileServer(root http.FileSystem) *FileServer {
 	s := &FileServer{
 		root:                 root,
 		serveMux:             serveMux,
-		es:					  []muxEntry{},
+		es:                   []muxEntry{},
 		server:               &http.Server{Handler: serveMux},
 		bindingNames:         map[string]bool{},
 		bindings:             []Bindings{},
@@ -123,10 +128,10 @@ func (s *FileServer) ListenAndServeTLS(certFile, keyFile string) error {
 }
 
 func (s *FileServer) handlePage(path string, root http.FileSystem) {
-	path = strings.Join([]string{s.getPrefix(), path}, "/")	
+	path = strings.Join([]string{s.getPrefix(), path}, "/")
 	path = strings.TrimRight(path, "/")
 	// s.serveMux.Handle(path+"/", http.StripPrefix(path, http.FileServer(root)))
-	s.es = append(s.es, muxEntry{pattern: path+"/", h: http.StripPrefix(path, http.FileServer(root))})
+	s.es = append(s.es, muxEntry{pattern: path + "/", h: http.StripPrefix(path, http.FileServer(root))})
 }
 
 func (s *FileServer) getPrefix() string {
@@ -197,8 +202,8 @@ func (s *FileServer) handleVuego(prefix string, tls bool) {
 
 	// s.serveMux.Handle(prefix+serverPath, http.StripPrefix(prefix, websocket.Handler(s.serveClientConn)))
 	// s.serveMux.Handle(prefix+getScriptPath(serverPath), http.StripPrefix(prefix, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-	s.es = append(s.es, muxEntry{pattern: prefix+serverPath, h:http.StripPrefix(prefix, websocket.Handler(s.serveClientConn)) })
-	s.es = append(s.es, muxEntry{pattern: prefix+getScriptPath(serverPath), h: http.StripPrefix(prefix, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+	s.es = append(s.es, muxEntry{pattern: prefix + serverPath, h: http.StripPrefix(prefix, websocket.Handler(s.serveClientConn))})
+	s.es = append(s.es, muxEntry{pattern: prefix + getScriptPath(serverPath), h: http.StripPrefix(prefix, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		w.Header().Add("Content-Type", "text/javascript")
 		jsQuery := fmt.Sprintf("?%s", req.URL.RawQuery)
 
@@ -207,12 +212,17 @@ func (s *FileServer) handleVuego(prefix string, tls bool) {
 			names = append(names, name)
 		}
 
-		clientScript := injectOptions(&jsOption{
+		jso := &jsOption{
 			TLS:      tls,
 			Prefix:   prefix,
 			Search:   jsQuery,
 			Bindings: names,
-		})
+		}
+		if s.ClientOptions != nil {
+			co := s.ClientOptions
+			jso.BlurOnClose = co.BlurOnClose
+		}
+		clientScript := injectOptions(jso)
 		fmt.Fprint(w, clientScript)
 	}))})
 }

@@ -29,9 +29,10 @@ interface Option {
   prefix: string; // publicPath
   search: string; // search string used to fetch this script
   bindings: string[]; // server binding names
+  blurOnClose: boolean; // make body blur on socket close
 }
 
-(function() {
+(function () {
   let options: Option;
   // inject server options here
   options = null;
@@ -42,7 +43,8 @@ interface Option {
       readyFuncName: "Vuego",
       prefix: "",
       search: "?name=api",
-      bindings: []
+      bindings: [],
+      blurOnClose: true
     };
   }
   let dev = options.dev;
@@ -73,7 +75,7 @@ interface Option {
       // root[options.readyFuncName] = () => ready;
       root[options.readyFuncName] = {};
       for (const name of options.bindings) {
-        let placeholder = async function() {
+        let placeholder = async function () {
           await ready;
           if (root[name] === placeholder) {
             throw new Error("binding is not ready: " + name);
@@ -185,7 +187,8 @@ interface Option {
       ws.onmessage = this.onmessage.bind(this);
 
       ws.onopen = e => {
-        (window as any).document.body.style.opacity = 1;
+        if (options.blurOnClose)
+          (window as any).document.body.style.opacity = 1;
       };
 
       ws.onerror = e => {
@@ -193,7 +196,8 @@ interface Option {
       };
 
       ws.onclose = e => {
-        (window as any).document.body.style.opacity = 0.382;
+        if (options.blurOnClose)
+          (window as any).document.body.style.opacity = 0.382;
         console.log("ws close at", new Date().toLocaleString(), e);
       };
     }

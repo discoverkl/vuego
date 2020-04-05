@@ -13,6 +13,7 @@ type jsOption struct {
 	Prefix        string   `json:"prefix"`
 	Search        string   `json:"search"`
 	Bindings      []string `json:"bindings"`
+	BlurOnClose   bool     `json:"blurOnClose"`
 }
 
 func injectOptions(op *jsOption) string {
@@ -62,7 +63,8 @@ var script = `var __awaiter = (this && this.__awaiter) || function (thisArg, _ar
             readyFuncName: "Vuego",
             prefix: "",
             search: "?name=api",
-            bindings: []
+            bindings: [],
+            blurOnClose: true
         };
     }
     let dev = options.dev;
@@ -200,13 +202,15 @@ var script = `var __awaiter = (this && this.__awaiter) || function (thisArg, _ar
             let ws = this.ws;
             ws.onmessage = this.onmessage.bind(this);
             ws.onopen = e => {
-                window.document.body.style.opacity = 1;
+                if (options.blurOnClose)
+                    window.document.body.style.opacity = 1;
             };
             ws.onerror = e => {
                 console.log("ws error at", new Date().toLocaleString(), e);
             };
             ws.onclose = e => {
-                window.document.body.style.opacity = 0.382;
+                if (options.blurOnClose)
+                    window.document.body.style.opacity = 0.382;
                 console.log("ws close at", new Date().toLocaleString(), e);
             };
         }

@@ -13,7 +13,7 @@ type UI interface {
 	Run() error
 	Bindable
 	RunMode
-	Add(name string, child UI)		// add sub UI
+	Add(name string, child UI) // add sub UI
 }
 
 type Bindable interface {
@@ -33,7 +33,7 @@ type ui struct {
 	runMode
 	confError error
 	bindings  []Bindings
-	children map[string]UI
+	children  map[string]UI
 }
 
 func New(ops ...Option) UI {
@@ -129,6 +129,11 @@ func (u *ui) Run() error {
 		return fmt.Errorf("unsupported mode: %v", u)
 	}
 
+	// ** Client Options
+	svr.ClientOptions = &ClientOptions{
+		BlurOnClose: u.conf.BlurOnClose,
+	}
+
 	// ** Bindings
 	for _, b := range u.bindings {
 		err = svr.Bind(b)
@@ -179,7 +184,7 @@ func (u *ui) Run() error {
 }
 
 func (u *ui) Add(name string, child UI) {
-	u.children[name] = child	
+	u.children[name] = child
 }
 
 func (u *ui) Done() <-chan struct{} {

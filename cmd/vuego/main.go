@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 	"time"
 
 	"github.com/discoverkl/vuego/ui"
@@ -42,8 +43,10 @@ func (c *Counter) Add() int {
 
 func main() {
 	app := ui.New(
+		ui.Root(http.Dir("fe/dist")),
 		ui.OnlinePort(8000),
-		ui.OnlinePrefix("/me"),
+		ui.BlurOnClose(true),
+		// ui.OnlinePrefix("/me"),
 		// ui.OnlineAttach(ui.HTTPServerFunc(http.Handle), false),
 		// ui.LocalExitDelay(5 * time.Second),
 		// ui.OnlineAuth(ui.BasicAuth(func(user, pass string) bool {
@@ -52,8 +55,8 @@ func main() {
 		// ui.OnlineTLS("server.crt", "server.key"),
 	)
 
-	app.Bind(ui.Func("sum", sum))
-	app.Bind(ui.Func("timer", timer))
+	app.BindFunc("sum", sum)
+	app.BindFunc("timer", timer)
 
 	// app.BindFunc("math.pow", math.Pow)
 	// app.BindFunc("math.abs", math.Abs)

@@ -17,6 +17,7 @@ type Option func(*uiConfig) error
 type uiConfig struct {
 	Mode            string
 	Quiet           bool
+	BlurOnClose     bool
 	Root            http.FileSystem
 	AppX            int
 	AppY            int
@@ -30,19 +31,20 @@ type uiConfig struct {
 	OnlineAuth      func(http.HandlerFunc) http.HandlerFunc
 	OnlineCertFile  string
 	OnlineKeyFile   string
-	OnlineAttach	HTTPServer
-	OnlineAttachTLS	bool
+	OnlineAttach    HTTPServer
+	OnlineAttachTLS bool
 	LocalMapURL     func(net.Listener) string
 	LocalExitDelay  *time.Duration
 }
 
 func defaultUIConfig() *uiConfig {
 	return &uiConfig{
-		Root:       defaultRoot,
-		AppX:       200,
-		AppY:       200,
-		AppWidth:   1024,
-		AppHeight:  768,
+		Root:        defaultRoot,
+		BlurOnClose: true,
+		AppX:        200,
+		AppY:        200,
+		AppWidth:    1024,
+		AppHeight:   768,
 	}
 }
 
@@ -65,6 +67,13 @@ func Mode(mod string) Option {
 func Quiet() Option {
 	return func(c *uiConfig) error {
 		c.Quiet = true
+		return nil
+	}
+}
+
+func BlurOnClose(blur bool) Option {
+	return func(c *uiConfig) error {
+		c.BlurOnClose = blur
 		return nil
 	}
 }
