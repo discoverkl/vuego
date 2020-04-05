@@ -6,6 +6,8 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -49,6 +51,7 @@ type FileServer struct {
 	Listener      net.Listener
 	Prefix        string // path prefix
 	Auth          func(http.HandlerFunc) http.HandlerFunc
+	HistoryMode   bool
 	ClientOptions *ClientOptions
 
 	root http.FileSystem // optional for default instance
@@ -131,7 +134,34 @@ func (s *FileServer) handlePage(path string, root http.FileSystem) {
 	path = strings.Join([]string{s.getPrefix(), path}, "/")
 	path = strings.TrimRight(path, "/")
 	// s.serveMux.Handle(path+"/", http.StripPrefix(path, http.FileServer(root)))
-	s.es = append(s.es, muxEntry{pattern: path + "/", h: http.StripPrefix(path, http.FileServer(root))})
+	handler := http.FileServer(root)
+	if s.HistoryMode {
+		handler = s.historyModeFileServer(root)
+	}
+	s.es = append(s.es, muxEntry{pattern: path + "/", h: http.StripPrefix(path, handler)})
+}
+
+func (s *FileServer) historyModeFileServer(root http.FileSystem) http.Handler {
+	fileServer := http.FileServer(root)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		upath := r.URL.Path
+		if !strings.HasPrefix(upath, "/") {
+			upath = "/" + upath
+			r.URL.Path = upath
+		}
+		name := path.Clean(upath)
+		f, err := root.Open(name)
+		if err != nil {
+			if os.IsNotExist(err) {
+				// fallback to root
+				r.URL.Path = "/"
+			}
+			fileServer.ServeHTTP(w, r)
+			return
+		}
+		f.Close()
+		fileServer.ServeHTTP(w, r)
+	})
 }
 
 func (s *FileServer) getPrefix() string {

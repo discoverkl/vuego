@@ -46,6 +46,7 @@ func main() {
 		ui.Root(http.Dir("fe/dist")),
 		ui.OnlinePort(8000),
 		ui.BlurOnClose(true),
+		ui.HistoryMode(true),
 		// ui.OnlinePrefix("/me"),
 		// ui.OnlineAttach(ui.HTTPServerFunc(http.Handle), false),
 		// ui.LocalExitDelay(5 * time.Second),

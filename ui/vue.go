@@ -130,6 +130,7 @@ func (u *ui) Run() error {
 	}
 
 	// ** Client Options
+	svr.HistoryMode = u.conf.HistoryMode
 	svr.ClientOptions = &ClientOptions{
 		BlurOnClose: u.conf.BlurOnClose,
 	}

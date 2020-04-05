@@ -18,6 +18,7 @@ type uiConfig struct {
 	Mode            string
 	Quiet           bool
 	BlurOnClose     bool
+	HistoryMode     bool
 	Root            http.FileSystem
 	AppX            int
 	AppY            int
@@ -81,6 +82,13 @@ func BlurOnClose(blur bool) Option {
 //
 // FileSystem Options
 //
+
+func HistoryMode(enable bool) Option {
+	return func(c *uiConfig) error {
+		c.HistoryMode = enable
+		return nil
+	}
+}
 
 func Root(root http.FileSystem) Option {
 	return func(c *uiConfig) error {
