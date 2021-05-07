@@ -10,7 +10,7 @@
   "dependencies": {
     "@vue/composition-api": "^0.3.4",
     "monaco-editor": "0.20.0",
-    "underscore": "^1.9.2",
+    "underscore": "^1.12.1",
     "vue": "^2.6.10",
     "vue2go": "^1.0.6"
   },
