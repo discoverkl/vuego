@@ -5,8 +5,7 @@ import (
 	"log"
 	"os"
 	"strings"
-
-	"github.com/google/shlex"
+	// "github.com/google/shlex"
 )
 
 type UI interface {
@@ -235,16 +234,16 @@ func (u *ui) useSpecialEnvSetting() {
 		}
 	}
 
-	// chrome args
-	chromeEnv := os.Getenv("APP_CHROME_ARGS")
-	if chromeEnv != "" {
-		chromeArgs, err := shlex.Split(chromeEnv)
-		if err != nil {
-			log.Printf("parse env arguments failed for APP_CHROME_ARGS: %v", err)
-		} else {
-			u.conf.AppChromeArgs = append(u.conf.AppChromeArgs, chromeArgs...)
-		}
-	}
+	// // chrome args
+	// chromeEnv := os.Getenv("APP_CHROME_ARGS")
+	// if chromeEnv != "" {
+	// 	chromeArgs, err := shlex.Split(chromeEnv)
+	// 	if err != nil {
+	// 		log.Printf("parse env arguments failed for APP_CHROME_ARGS: %v", err)
+	// 	} else {
+	// 		u.conf.AppChromeArgs = append(u.conf.AppChromeArgs, chromeArgs...)
+	// 	}
+	// }
 
 	// chrome binary
 	chromePathEnv := os.Getenv("APP_CHROME_BINARY")

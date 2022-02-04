@@ -1,24 +1,28 @@
 package code
 
 import (
+	"embed"
 	"fmt"
+	"io/fs"
 	"io/ioutil"
 	"net/http"
 	"path/filepath"
 	"sort"
 
 	"github.com/discoverkl/vuego/ui"
-	"github.com/markbates/pkger"
 )
+
+//go:embed fe/dist
+var root embed.FS
 
 type API struct {
 	root http.FileSystem
 }
 
 type FileInfo struct {
-	Name string	`json:"name"`
-	Path string `json:"path"`
-	IsDir bool	`json:"isDir"`
+	Name  string `json:"name"`
+	Path  string `json:"path"`
+	IsDir bool   `json:"isDir"`
 }
 
 func (a *API) ListDir(path string) ([]FileInfo, error) {
@@ -41,8 +45,8 @@ func (a *API) ListDir(path string) ([]FileInfo, error) {
 	ret := []FileInfo{}
 	for _, fi := range fis {
 		ret = append(ret, FileInfo{
-			Name: fi.Name(),
-			Path: filepath.Join(path, fi.Name()),
+			Name:  fi.Name(),
+			Path:  filepath.Join(path, fi.Name()),
 			IsDir: fi.IsDir(),
 		})
 	}
@@ -57,7 +61,7 @@ func (a *API) ListDir(path string) ([]FileInfo, error) {
 
 	return ret, nil
 }
-  
+
 func (a *API) LoadText(path string) (string, error) {
 	f, err := a.root.Open(path)
 	if err != nil {
@@ -75,8 +79,10 @@ func (a *API) SaveText(path string, text string) error {
 }
 
 func UI(codeRoot http.FileSystem, ops ...ui.Option) ui.UI {
+	webroot, _ := fs.Sub(root, "fe/dist")
 	ops = append([]ui.Option{
-		ui.Root(pkger.Dir("github.com/discoverkl/vuego:/code/fe/dist")), 
+		// ui.Root(pkger.Dir("github.com/discoverkl/vuego:/code/fe/dist")),
+		ui.Root(http.FS(webroot)),
 		ui.OnlinePort(8000),
 	}, ops...)
 
