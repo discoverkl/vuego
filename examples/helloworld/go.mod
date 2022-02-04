@@ -5,4 +5,5 @@ go 1.13
 require (
 	github.com/discoverkl/vuego v0.0.0-20200220183918-c205b1590572
 	github.com/markbates/pkger v0.14.0
+	golang.org/dl v0.0.0-20220131190855-70de1b897271 // indirect
 )
